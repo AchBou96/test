@@ -1,0 +1,596 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <base target="_top">
+  <style>
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+    
+    body {
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+      background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);
+      padding: 20px;
+      min-height: 100vh;
+    }
+    
+    .container {
+      max-width: 600px;
+      margin: 0 auto;
+      background: white;
+      border-radius: 12px;
+      box-shadow: 0 10px 30px rgba(0, 0, 0, 0.1);
+      overflow: hidden;
+    }
+    
+    .header {
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      color: white;
+      padding: 30px;
+      text-align: center;
+    }
+    
+    .header h1 {
+      font-size: 28px;
+      margin-bottom: 10px;
+    }
+    
+    .header p {
+      opacity: 0.9;
+      font-size: 16px;
+    }
+    
+    .form-section {
+      padding: 30px;
+    }
+    
+    .form-group {
+      margin-bottom: 25px;
+    }
+    
+    .form-group label {
+      display: block;
+      margin-bottom: 8px;
+      font-weight: 600;
+      color: #333;
+      font-size: 14px;
+    }
+    
+    .form-group input,
+    .form-group select {
+      width: 100%;
+      padding: 12px 15px;
+      border: 2px solid #e1e4e8;
+      border-radius: 8px;
+      font-size: 15px;
+      transition: all 0.3s ease;
+      background: #f8f9fa;
+    }
+    
+    .form-group input:focus,
+    .form-group select:focus {
+      outline: none;
+      border-color: #667eea;
+      background: white;
+      box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+    }
+    
+    .form-group input[type="number"] {
+      appearance: textfield;
+    }
+    
+    .form-group small {
+      display: block;
+      margin-top: 5px;
+      color: #6c757d;
+      font-size: 13px;
+    }
+    
+    .tech-details {
+      display: none;
+      margin-top: 15px;
+      padding: 15px;
+      background: #f8f9fa;
+      border-radius: 8px;
+      border: 1px solid #e1e4e8;
+    }
+    
+    .tech-details.active {
+      display: block;
+    }
+    
+    .button-group {
+      display: flex;
+      gap: 10px;
+      margin-top: 30px;
+    }
+    
+    .btn {
+      flex: 1;
+      padding: 14px 20px;
+      border: none;
+      border-radius: 8px;
+      font-size: 16px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.3s ease;
+    }
+    
+    .btn-primary {
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      color: white;
+    }
+    
+    .btn-primary:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 5px 15px rgba(102, 126, 234, 0.4);
+    }
+    
+    .btn-secondary {
+      background: #e9ecef;
+      color: #495057;
+    }
+    
+    .btn-secondary:hover {
+      background: #dee2e6;
+    }
+    
+    .radio-group {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 10px;
+      margin-top: 10px;
+    }
+    
+    .radio-option {
+      position: relative;
+    }
+    
+    .radio-option input[type="radio"] {
+      position: absolute;
+      opacity: 0;
+    }
+    
+    .radio-option label {
+      display: block;
+      padding: 12px;
+      text-align: center;
+      background: #f8f9fa;
+      border: 2px solid #e1e4e8;
+      border-radius: 8px;
+      cursor: pointer;
+      transition: all 0.3s ease;
+      font-weight: 500;
+    }
+    
+    .radio-option input[type="radio"]:checked + label {
+      background: #667eea;
+      color: white;
+      border-color: #667eea;
+    }
+    
+    .info-box {
+      background: #e7f3ff;
+      border-left: 4px solid #2196F3;
+      padding: 15px;
+      margin-bottom: 20px;
+      border-radius: 4px;
+    }
+    
+    .info-box h3 {
+      color: #1976D2;
+      margin-bottom: 5px;
+      font-size: 16px;
+    }
+    
+    .info-box p {
+      color: #333;
+      font-size: 14px;
+    }
+    
+    .loading {
+      display: none;
+      text-align: center;
+      padding: 20px;
+    }
+    
+    .loading.active {
+      display: block;
+    }
+    
+    .spinner {
+      border: 3px solid #f3f3f3;
+      border-top: 3px solid #667eea;
+      border-radius: 50%;
+      width: 40px;
+      height: 40px;
+      animation: spin 1s linear infinite;
+      margin: 0 auto;
+    }
+    
+    @keyframes spin {
+      0% { transform: rotate(0deg); }
+      100% { transform: rotate(360deg); }
+    }
+    
+    .loading-state {
+      text-align: center;
+      padding: 40px;
+      color: #6c757d;
+    }
+    
+    .error-message {
+      background: #f8d7da;
+      color: #721c24;
+      padding: 12px 20px;
+      border-radius: 8px;
+      margin-bottom: 20px;
+      border: 1px solid #f5c6cb;
+    }
+    
+    .skeleton {
+      background: linear-gradient(90deg, #f0f0f0 25%, #e0e0e0 50%, #f0f0f0 75%);
+      background-size: 200% 100%;
+      animation: loading 1.5s infinite;
+      height: 20px;
+      border-radius: 4px;
+      margin-bottom: 5px;
+    }
+    
+    .skeleton.text {
+      width: 70%;
+    }
+    
+    .skeleton.number {
+      width: 40%;
+    }
+    
+    @keyframes loading {
+      0% { background-position: 200% 0; }
+      100% { background-position: -200% 0; }
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="header">
+      <h1>Save Project to Database</h1>
+      <p>Enter project specifications for database storage</p>
+    </div>
+    
+    <div class="form-section">
+      <div class="info-box" id="projectInfoBox">
+        <div class="skeleton text"></div>
+        <div class="skeleton number"></div>
+      </div>
+      
+      <form id="projectForm" style="display: none;">
+        <!-- Project Scope -->
+        <div class="form-group">
+          <label for="scope">Project Scope</label>
+          <div class="radio-group">
+            <div class="radio-option">
+              <input type="radio" id="scope-ep" name="scope" value="EP" checked>
+              <label for="scope-ep">EP</label>
+            </div>
+            <div class="radio-option">
+              <input type="radio" id="scope-epp" name="scope" value="EP+">
+              <label for="scope-epp">EP+</label>
+            </div>
+          </div>
+        </div>
+        
+        <!-- Flowrate -->
+        <div class="form-group">
+          <label for="flowrate">Project Flowrate</label>
+          <input type="number" id="flowrate" name="flowrate" placeholder="Enter flowrate" min="0" step="0.1" required>
+          <small>Unit: m³/h (cubic meters per hour)</small>
+        </div>
+        
+        <!-- Technology Type -->
+        <div class="form-group">
+          <label for="technology">Technology Type</label>
+          <select id="technology" name="technology" required onchange="showTechDetails()">
+            <option value="">Select technology...</option>
+            <option value="MBR">MBR (Membrane Bioreactor)</option>
+            <option value="RO">RO (Reverse Osmosis)</option>
+            <option value="UF">Pressurized UF (Ultrafiltration)</option>
+            <option value="EDR">EDR/EDI (Electrodeionization)</option>
+            <option value="Complex">Complex (Multiple Technologies)</option>
+          </select>
+        </div>
+        
+        <!-- Technology Details -->
+        <div id="tech-details-mbr" class="tech-details">
+          <label for="mbr-cassettes">Number of MBR Cassettes</label>
+          <input type="number" id="mbr-cassettes" min="0" placeholder="Enter number of cassettes">
+        </div>
+        
+        <div id="tech-details-ro" class="tech-details">
+          <label for="ro-skids">Number of RO Skids</label>
+          <input type="number" id="ro-skids" min="0" placeholder="Enter number of skids">
+        </div>
+        
+        <div id="tech-details-uf" class="tech-details">
+          <label for="uf-skids">Number of UF Skids</label>
+          <input type="number" id="uf-skids" min="0" placeholder="Enter number of skids">
+        </div>
+        
+        <div id="tech-details-edr" class="tech-details">
+          <label for="edr-stacks">Number of EDR/EDI Stacks</label>
+          <input type="number" id="edr-stacks" min="0" placeholder="Enter number of stacks">
+        </div>
+        
+        <div id="tech-details-complex" class="tech-details">
+          <label for="complex-tech">Technologies Involved</label>
+          <input type="text" id="complex-tech" placeholder="e.g., MBR+RO, UF+EDR">
+          <small>Specify all technologies and quantities in the next step</small>
+        </div>
+        
+        <!-- Project Market -->
+        <div class="form-group">
+          <label for="market">Project Market</label>
+          <select id="market" name="market" required>
+            <option value="">Select market...</option>
+            <option value="Pharmaceutical">Pharmaceutical</option>
+            <option value="Pulp and Paper">Pulp and Paper</option>
+            <option value="HPI">HPI (Hydrocarbon Processing)</option>
+            <option value="Municipal">Municipal</option>
+            <option value="Food and Beverage">Food and Beverage</option>
+            <option value="Data Center">Data Center</option>
+            <option value="Power Generation">Power Generation</option>
+            <option value="Mining">Mining</option>
+            <option value="Chemical">Chemical</option>
+            <option value="Other">Other (Specify)</option>
+          </select>
+        </div>
+        
+        <!-- Custom Market -->
+        <div id="custom-market-group" class="form-group" style="display: none;">
+          <label for="custom-market">Specify Market</label>
+          <input type="text" id="custom-market" placeholder="Enter custom market">
+        </div>
+        
+        <div class="button-group">
+          <button type="button" class="btn btn-secondary" onclick="cancel()">Cancel</button>
+          <button type="submit" class="btn btn-primary" id="saveBtn">Save to Database</button>
+        </div>
+      </form>
+      
+      <div class="loading" id="loadingState">
+        <div class="spinner"></div>
+        <p style="margin-top: 15px; color: #667eea;">Saving to database...</p>
+      </div>
+      
+      <div class="loading-state" id="initialLoading">
+        <div class="spinner"></div>
+        <p>Loading project information...</p>
+      </div>
+    </div>
+  </div>
+  
+  <script>
+    let projectData = null;
+    
+    // Load project data on startup
+    window.onload = function() {
+      loadProjectData();
+    };
+    
+    function loadProjectData() {
+      google.script.run
+        .withSuccessHandler(displayProjectData)
+        .withFailureHandler(handleLoadError)
+        .getProjectDataForSaveUI();
+    }
+    
+    function displayProjectData(data) {
+      projectData = data;
+      
+      // Hide loading state
+      document.getElementById('initialLoading').style.display = 'none';
+      
+      // Update info box with real project data
+      const infoBox = document.getElementById('projectInfoBox');
+      infoBox.innerHTML = `
+        <h3>Project: ${escapeHtml(data.projectName || 'Unknown Project')}</h3>
+        <p>Project Number: ${escapeHtml(data.projectNumber || 'Unknown')}</p>
+      `;
+      
+      // Show form
+      document.getElementById('projectForm').style.display = 'block';
+      
+      // If we have any pre-filled data, populate it
+      if (data.scope) {
+        document.getElementById(`scope-${data.scope.toLowerCase()}`).checked = true;
+      }
+      
+      if (data.flowrate) {
+        document.getElementById('flowrate').value = data.flowrate;
+      }
+      
+      if (data.technology) {
+        document.getElementById('technology').value = data.technology;
+        showTechDetails();
+      }
+      
+      if (data.market) {
+        document.getElementById('market').value = data.market;
+      }
+    }
+    
+    function handleLoadError(error) {
+      console.error('Error loading project data:', error);
+      
+      // Hide loading state
+      document.getElementById('initialLoading').style.display = 'none';
+      
+      // Show error in info box
+      const infoBox = document.getElementById('projectInfoBox');
+      infoBox.innerHTML = `
+        <div class="error-message">
+          Failed to load project information. Please try again.
+        </div>
+      `;
+      
+      // Still show form with default values
+      document.getElementById('projectForm').style.display = 'block';
+    }
+    
+    function showTechDetails() {
+      // Hide all tech details
+      document.querySelectorAll('.tech-details').forEach(el => {
+        el.classList.remove('active');
+      });
+      
+      // Show selected tech details
+      const tech = document.getElementById('technology').value;
+      if (tech) {
+        const detailsId = 'tech-details-' + tech.toLowerCase();
+        const detailsEl = document.getElementById(detailsId);
+        if (detailsEl) {
+          detailsEl.classList.add('active');
+        }
+      }
+    }
+    
+    // Show/hide custom market field
+    document.getElementById('market').addEventListener('change', function() {
+      const customGroup = document.getElementById('custom-market-group');
+      if (this.value === 'Other') {
+        customGroup.style.display = 'block';
+        document.getElementById('custom-market').required = true;
+      } else {
+        customGroup.style.display = 'none';
+        document.getElementById('custom-market').required = false;
+      }
+    });
+    
+    // Form submission
+    document.getElementById('projectForm').addEventListener('submit', function(e) {
+      e.preventDefault();
+      
+      // Validate form
+      if (!this.checkValidity()) {
+        this.reportValidity();
+        return;
+      }
+      
+      // Disable save button
+      document.getElementById('saveBtn').disabled = true;
+      
+      // Show loading
+      document.querySelector('.form-section form').style.display = 'none';
+      document.getElementById('loadingState').classList.add('active');
+      
+      // Collect form data
+      const formData = {
+        scope: document.querySelector('input[name="scope"]:checked').value,
+        flowrate: document.getElementById('flowrate').value,
+        technology: document.getElementById('technology').value,
+        market: document.getElementById('market').value === 'Other' ? 
+                document.getElementById('custom-market').value : 
+                document.getElementById('market').value,
+        // Add technology-specific details
+        techDetails: getTechDetails()
+      };
+      
+      // Send to Google Apps Script
+      google.script.run
+        .withSuccessHandler(onSuccess)
+        .withFailureHandler(onError)
+        .saveProjectSpecs(formData);
+    });
+    
+    function getTechDetails() {
+      const tech = document.getElementById('technology').value;
+      let details = {};
+      
+      switch(tech) {
+        case 'MBR':
+          details.cassettes = document.getElementById('mbr-cassettes').value || 0;
+          break;
+        case 'RO':
+          details.skids = document.getElementById('ro-skids').value || 0;
+          break;
+        case 'UF':
+          details.skids = document.getElementById('uf-skids').value || 0;
+          break;
+        case 'EDR':
+          details.stacks = document.getElementById('edr-stacks').value || 0;
+          break;
+        case 'Complex':
+          details.technologies = document.getElementById('complex-tech').value || '';
+          break;
+      }
+      
+      return details;
+    }
+    
+    function onSuccess() {
+      // Show success message briefly
+      document.getElementById('loadingState').innerHTML = `
+        <div style="color: #28a745; font-size: 48px;">✓</div>
+        <p style="margin-top: 15px; color: #28a745; font-weight: 600;">
+          Project saved successfully!
+        </p>
+      `;
+      
+      // Close after 1.5 seconds
+      setTimeout(() => {
+        google.script.host.close();
+      }, 1500);
+    }
+    
+    function onError(error) {
+      console.error('Save error:', error);
+      
+      // Show error
+      document.getElementById('loadingState').classList.remove('active');
+      document.querySelector('.form-section form').style.display = 'block';
+      document.getElementById('saveBtn').disabled = false;
+      
+      // Display error message
+      const errorDiv = document.createElement('div');
+      errorDiv.className = 'error-message';
+      errorDiv.textContent = 'Error: ' + (error.message || 'Failed to save project');
+      
+      const form = document.getElementById('projectForm');
+      form.parentNode.insertBefore(errorDiv, form);
+      
+      // Auto-remove after 5 seconds
+      setTimeout(() => errorDiv.remove(), 5000);
+    }
+    
+    function cancel() {
+      if (confirm('Are you sure you want to cancel? Any unsaved data will be lost.')) {
+        google.script.host.close();
+      }
+    }
+    
+    function escapeHtml(text) {
+      const div = document.createElement('div');
+      div.textContent = text || '';
+      return div.innerHTML;
+    }
+    
+    // Auto-save draft functionality (optional enhancement)
+    let saveTimeout;
+    function autoSaveDraft() {
+      clearTimeout(saveTimeout);
+      saveTimeout = setTimeout(() => {
+        // Could implement draft saving to Properties Service
+        console.log('Draft saved');
+      }, 2000);
+    }
+    
+    // Add auto-save listeners to form inputs
+    document.querySelectorAll('input, select').forEach(element => {
+      element.addEventListener('change', autoSaveDraft);
+      element.addEventListener('input', autoSaveDraft);
+    });
+  </script>
+</body>
+</html>

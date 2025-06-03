@@ -1,0 +1,719 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <base target="_top">
+  <style>
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+    
+    body {
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+      background: #f0f2f5;
+      padding: 20px;
+    }
+    
+    .container {
+      max-width: 900px;
+      margin: 0 auto;
+      background: white;
+      border-radius: 12px;
+      box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08);
+      overflow: hidden;
+    }
+    
+    .header {
+      background: linear-gradient(135deg, #FF6B6B 0%, #EE5A6F 100%);
+      color: white;
+      padding: 25px 30px;
+    }
+    
+    .header h1 {
+      font-size: 24px;
+      margin-bottom: 8px;
+    }
+    
+    .header p {
+      opacity: 0.9;
+      font-size: 15px;
+    }
+    
+    .progress-bar {
+      background: rgba(255, 255, 255, 0.3);
+      height: 6px;
+      border-radius: 3px;
+      margin-top: 15px;
+      overflow: hidden;
+    }
+    
+    .progress-fill {
+      background: white;
+      height: 100%;
+      width: 0%;
+      transition: width 0.3s ease;
+      border-radius: 3px;
+    }
+    
+    .main-content {
+      display: flex;
+      height: 500px;
+    }
+    
+    .items-panel {
+      flex: 1;
+      border-right: 1px solid #e1e4e8;
+      overflow-y: auto;
+      padding: 20px;
+    }
+    
+    .categories-panel {
+      width: 350px;
+      padding: 20px;
+      background: #f8f9fa;
+      overflow-y: auto;
+    }
+    
+    .loading-state {
+      text-align: center;
+      padding: 60px 20px;
+      color: #666;
+    }
+    
+    .loading-spinner {
+      width: 40px;
+      height: 40px;
+      border: 3px solid #f3f3f3;
+      border-top: 3px solid #FF6B6B;
+      border-radius: 50%;
+      animation: spin 1s linear infinite;
+      margin: 0 auto 20px;
+    }
+    
+    @keyframes spin {
+      0% { transform: rotate(0deg); }
+      100% { transform: rotate(360deg); }
+    }
+    
+    .item-card {
+      background: white;
+      border: 2px solid #e1e4e8;
+      border-radius: 8px;
+      padding: 15px;
+      margin-bottom: 12px;
+      cursor: pointer;
+      transition: all 0.2s ease;
+      position: relative;
+    }
+    
+    .item-card:hover {
+      border-color: #FF6B6B;
+      box-shadow: 0 2px 8px rgba(255, 107, 107, 0.1);
+    }
+    
+    .item-card.selected {
+      border-color: #FF6B6B;
+      background: #FFF5F5;
+    }
+    
+    .item-card.categorized {
+      opacity: 0.6;
+      background: #f0f9ff;
+      border-color: #4CAF50;
+      cursor: default;
+    }
+    
+    .item-card.categorized:hover {
+      border-color: #4CAF50;
+      box-shadow: none;
+    }
+    
+    .item-number {
+      position: absolute;
+      top: 10px;
+      right: 15px;
+      background: #FF6B6B;
+      color: white;
+      width: 24px;
+      height: 24px;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 12px;
+      font-weight: 600;
+    }
+    
+    .item-card.categorized .item-number {
+      background: #4CAF50;
+    }
+    
+    .item-description {
+      font-weight: 600;
+      color: #333;
+      margin-bottom: 8px;
+      padding-right: 35px;
+    }
+    
+    .item-costs {
+      display: flex;
+      gap: 20px;
+      font-size: 14px;
+    }
+    
+    .cost-label {
+      color: #666;
+    }
+    
+    .cost-value {
+      font-weight: 600;
+      color: #333;
+    }
+    
+    .item-category {
+      margin-top: 8px;
+      font-size: 13px;
+      color: #4CAF50;
+      font-weight: 600;
+    }
+    
+    .category-section {
+      margin-bottom: 25px;
+    }
+    
+    .category-title {
+      font-weight: 700;
+      color: #333;
+      margin-bottom: 10px;
+      font-size: 16px;
+      display: flex;
+      align-items: center;
+    }
+    
+    .category-icon {
+      width: 24px;
+      height: 24px;
+      background: #FF6B6B;
+      border-radius: 4px;
+      margin-right: 10px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: white;
+      font-size: 12px;
+      font-weight: bold;
+    }
+    
+    .subcategory-list {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+    
+    .subcategory-btn {
+      padding: 10px 15px;
+      background: white;
+      border: 2px solid #e1e4e8;
+      border-radius: 6px;
+      cursor: pointer;
+      transition: all 0.2s ease;
+      text-align: left;
+      font-size: 14px;
+      color: #495057;
+      position: relative;
+    }
+    
+    .subcategory-btn:hover {
+      border-color: #FF6B6B;
+      background: #FFF5F5;
+      color: #333;
+    }
+    
+    .subcategory-btn:active {
+      transform: scale(0.98);
+    }
+    
+    .subcategory-btn:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+    }
+    
+    .subcategory-btn:disabled:hover {
+      border-color: #e1e4e8;
+      background: white;
+    }
+    
+    .action-buttons {
+      padding: 20px 30px;
+      background: #f8f9fa;
+      border-top: 1px solid #e1e4e8;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    
+    .selection-info {
+      font-size: 14px;
+      color: #666;
+    }
+    
+    .selection-count {
+      font-weight: 600;
+      color: #FF6B6B;
+    }
+    
+    .btn {
+      padding: 10px 20px;
+      border: none;
+      border-radius: 6px;
+      font-size: 15px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.2s ease;
+    }
+    
+    .btn-skip {
+      background: #e9ecef;
+      color: #495057;
+      margin-right: 10px;
+    }
+    
+    .btn-skip:hover {
+      background: #dee2e6;
+    }
+    
+    .btn-finish {
+      background: linear-gradient(135deg, #4CAF50 0%, #45a049 100%);
+      color: white;
+    }
+    
+    .btn-finish:hover {
+      transform: translateY(-1px);
+      box-shadow: 0 4px 12px rgba(76, 175, 80, 0.3);
+    }
+    
+    .btn:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+      transform: none;
+    }
+    
+    .instructions {
+      background: #e3f2fd;
+      border-left: 4px solid #2196F3;
+      padding: 15px;
+      margin: 20px;
+      border-radius: 4px;
+      font-size: 14px;
+    }
+    
+    .instructions h3 {
+      color: #1976D2;
+      margin-bottom: 8px;
+      font-size: 15px;
+    }
+    
+    .instructions ul {
+      margin-left: 20px;
+      color: #333;
+    }
+    
+    .instructions li {
+      margin-bottom: 5px;
+    }
+    
+    .empty-state {
+      text-align: center;
+      padding: 60px 20px;
+      color: #666;
+    }
+    
+    .empty-state h3 {
+      font-size: 18px;
+      margin-bottom: 10px;
+      color: #333;
+    }
+    
+    .error-message {
+      background: #f8d7da;
+      color: #721c24;
+      padding: 15px;
+      border-radius: 8px;
+      margin: 20px;
+      border: 1px solid #f5c6cb;
+    }
+    
+    .success-banner {
+      background: #d4edda;
+      color: #155724;
+      padding: 12px 20px;
+      text-align: center;
+      font-weight: 500;
+      display: none;
+    }
+    
+    .success-banner.show {
+      display: block;
+    }
+    
+    @media (max-width: 768px) {
+      .main-content {
+        flex-direction: column;
+        height: auto;
+      }
+      
+      .categories-panel {
+        width: 100%;
+        border-top: 1px solid #e1e4e8;
+      }
+      
+      .items-panel {
+        border-right: none;
+        max-height: 300px;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="header">
+      <h1>Manual Item Categorization</h1>
+      <p>Select items and assign them to appropriate categories</p>
+      <div class="progress-bar">
+        <div class="progress-fill" id="progressBar"></div>
+      </div>
+    </div>
+    
+    <div class="success-banner" id="successBanner">
+      Items categorized successfully!
+    </div>
+    
+    <div class="instructions">
+      <h3>How to categorize items:</h3>
+      <ul>
+        <li>Click on one or more uncategorized items on the left</li>
+        <li>Select the appropriate subcategory from the right panel</li>
+        <li>Items will be automatically assigned and marked as categorized</li>
+        <li>Click "Skip All Remaining" to leave items uncategorized</li>
+      </ul>
+    </div>
+    
+    <div class="main-content">
+      <div class="items-panel">
+        <div id="itemsList">
+          <div class="loading-state">
+            <div class="loading-spinner"></div>
+            <p>Loading uncategorized items...</p>
+          </div>
+        </div>
+      </div>
+      
+      <div class="categories-panel" id="categoriesPanel">
+        <div class="loading-state">
+          <div class="loading-spinner"></div>
+          <p>Loading categories...</p>
+        </div>
+      </div>
+    </div>
+    
+    <div class="action-buttons">
+      <div class="selection-info">
+        <span class="selection-count" id="selectedCount">0</span> items selected
+        • <span id="remainingCount">0</span> items remaining
+      </div>
+      <div>
+        <button class="btn btn-skip" onclick="skipAll()">Skip All Remaining</button>
+        <button class="btn btn-finish" onclick="finish()" id="finishBtn">Finish Categorization</button>
+      </div>
+    </div>
+  </div>
+  
+  <script>
+    let selectedItems = new Set();
+    let categorizedItems = {};
+    let totalItems = 0;
+    let uncategorizedItems = [];
+    let categories = [];
+    
+    // Load data on startup
+    window.onload = function() {
+      loadCategorizationData();
+    };
+    
+    function loadCategorizationData() {
+      google.script.run
+        .withSuccessHandler(displayCategorizationData)
+        .withFailureHandler(handleError)
+        .getManualCategorizationData();
+    }
+    
+    function displayCategorizationData(data) {
+      if (!data) {
+        handleError({ message: 'No data received' });
+        return;
+      }
+      
+      uncategorizedItems = data.items || [];
+      categories = data.categories || [];
+      totalItems = uncategorizedItems.length;
+      
+      // Display items
+      displayItems();
+      
+      // Display categories
+      displayCategories();
+      
+      // Update counters
+      updateSelectionInfo();
+      
+      // If no items, show message
+      if (totalItems === 0) {
+        document.getElementById('itemsList').innerHTML = `
+          <div class="empty-state">
+            <h3>No Uncategorized Items</h3>
+            <p>All items have been successfully categorized!</p>
+          </div>
+        `;
+        document.getElementById('finishBtn').textContent = 'Close';
+      }
+    }
+    
+    function displayItems() {
+      const itemsList = document.getElementById('itemsList');
+      
+      if (uncategorizedItems.length === 0) {
+        itemsList.innerHTML = `
+          <div class="empty-state">
+            <h3>No items to categorize</h3>
+            <p>All items have been processed</p>
+          </div>
+        `;
+        return;
+      }
+      
+      itemsList.innerHTML = '';
+      
+      uncategorizedItems.forEach((item, index) => {
+        const itemCard = document.createElement('div');
+        itemCard.className = 'item-card';
+        itemCard.dataset.index = index;
+        
+        itemCard.innerHTML = `
+          <div class="item-number">${index + 1}</div>
+          <div class="item-description">${escapeHtml(item.description)}</div>
+          <div class="item-costs">
+            <span>
+              <span class="cost-label">EAC:</span>
+              <span class="cost-value">€${item.eacCost}</span>
+            </span>
+            <span>
+              <span class="cost-label">Budget:</span>
+              <span class="cost-value">€${item.budgetCost}</span>
+            </span>
+          </div>
+        `;
+        
+        itemCard.addEventListener('click', function() {
+          toggleItemSelection(index);
+        });
+        
+        itemsList.appendChild(itemCard);
+      });
+    }
+    
+    function displayCategories() {
+      const categoriesPanel = document.getElementById('categoriesPanel');
+      categoriesPanel.innerHTML = '';
+      
+      if (categories.length === 0) {
+        categoriesPanel.innerHTML = `
+          <div class="empty-state">
+            <p>No categories available</p>
+          </div>
+        `;
+        return;
+      }
+      
+      categories.forEach(category => {
+        const categorySection = document.createElement('div');
+        categorySection.className = 'category-section';
+        
+        // Choose icon color based on category
+        const iconColor = category.name === 'LABOR' ? '#FF6B6B' : '#2196F3';
+        const iconLetter = category.name.charAt(0);
+        
+        let categoryHTML = `
+          <div class="category-title">
+            <div class="category-icon" style="background: ${iconColor}">${iconLetter}</div>
+            ${category.name}
+          </div>
+          <div class="subcategory-list">
+        `;
+        
+        category.subcategories.forEach(subcat => {
+          categoryHTML += `
+            <button class="subcategory-btn" 
+                    onclick="categorizeItems('${escapeHtml(subcat.key)}')"
+                    id="btn-${subcat.key.replace(/[|]/g, '-')}">
+              ${escapeHtml(subcat.name)}
+            </button>
+          `;
+        });
+        
+        categoryHTML += '</div>';
+        categorySection.innerHTML = categoryHTML;
+        categoriesPanel.appendChild(categorySection);
+      });
+    }
+    
+    function toggleItemSelection(index) {
+      const card = document.querySelector(`[data-index="${index}"]`);
+      if (!card || card.classList.contains('categorized')) return;
+      
+      if (selectedItems.has(index)) {
+        selectedItems.delete(index);
+        card.classList.remove('selected');
+      } else {
+        selectedItems.add(index);
+        card.classList.add('selected');
+      }
+      
+      updateSelectionInfo();
+      updateCategoryButtons();
+    }
+    
+    function updateCategoryButtons() {
+      // Enable/disable category buttons based on selection
+      document.querySelectorAll('.subcategory-btn').forEach(btn => {
+        btn.disabled = selectedItems.size === 0;
+      });
+    }
+    
+    function categorizeItems(category) {
+      if (selectedItems.size === 0) {
+        alert('Please select at least one item to categorize');
+        return;
+      }
+      
+      // Show success banner
+      const banner = document.getElementById('successBanner');
+      banner.classList.add('show');
+      setTimeout(() => banner.classList.remove('show'), 2000);
+      
+      // Categorize selected items
+      selectedItems.forEach(index => {
+        categorizedItems[index] = category;
+        const card = document.querySelector(`[data-index="${index}"]`);
+        card.classList.remove('selected');
+        card.classList.add('categorized');
+        
+        // Add category label
+        const categoryLabel = document.createElement('div');
+        categoryLabel.className = 'item-category';
+        
+        // Parse category to show readable format
+        const [mainCat, subCat] = category.split('|');
+        categoryLabel.textContent = `Categorized as: ${mainCat} - ${subCat}`;
+        card.appendChild(categoryLabel);
+      });
+      
+      selectedItems.clear();
+      updateSelectionInfo();
+      updateProgress();
+      updateCategoryButtons();
+    }
+    
+    function updateSelectionInfo() {
+      document.getElementById('selectedCount').textContent = selectedItems.size;
+      const categorizedCount = Object.keys(categorizedItems).length;
+      document.getElementById('remainingCount').textContent = totalItems - categorizedCount;
+    }
+    
+    function updateProgress() {
+      const categorizedCount = Object.keys(categorizedItems).length;
+      const progress = totalItems > 0 ? (categorizedCount / totalItems) * 100 : 0;
+      document.getElementById('progressBar').style.width = progress + '%';
+    }
+    
+    function skipAll() {
+      const uncategorizedCount = totalItems - Object.keys(categorizedItems).length;
+      
+      if (uncategorizedCount === 0) {
+        finish();
+        return;
+      }
+      
+      if (confirm(`Skip categorization for ${uncategorizedCount} remaining item(s)?`)) {
+        finish();
+      }
+    }
+    
+    function finish() {
+      // Disable buttons during processing
+      document.getElementById('finishBtn').disabled = true;
+      document.getElementById('finishBtn').textContent = 'Processing...';
+      
+      // Send categorization data back to Google Apps Script
+      google.script.run
+        .withSuccessHandler(() => {
+          // Show success message briefly before closing
+          document.getElementById('successBanner').textContent = 'Categorization complete!';
+          document.getElementById('successBanner').classList.add('show');
+          setTimeout(() => google.script.host.close(), 1000);
+        })
+        .withFailureHandler(error => {
+          handleError(error);
+          document.getElementById('finishBtn').disabled = false;
+          document.getElementById('finishBtn').textContent = 'Finish Categorization';
+        })
+        .processCategorization(categorizedItems);
+    }
+    
+    function handleError(error) {
+      console.error('Error:', error);
+      const errorDiv = document.createElement('div');
+      errorDiv.className = 'error-message';
+      errorDiv.textContent = 'Error: ' + (error.message || 'Failed to load data');
+      
+      // Find a suitable place to insert the error
+      const container = document.querySelector('.instructions');
+      if (container) {
+        container.parentNode.insertBefore(errorDiv, container.nextSibling);
+      }
+      
+      // Auto-remove after 5 seconds
+      setTimeout(() => errorDiv.remove(), 5000);
+    }
+    
+    function escapeHtml(text) {
+      const div = document.createElement('div');
+      div.textContent = text || '';
+      return div.innerHTML;
+    }
+    
+    // Keyboard shortcuts
+    document.addEventListener('keydown', function(e) {
+      if (e.key === 'Escape') {
+        // Clear selection
+        selectedItems.clear();
+        document.querySelectorAll('.item-card.selected').forEach(card => {
+          card.classList.remove('selected');
+        });
+        updateSelectionInfo();
+        updateCategoryButtons();
+      } else if (e.ctrlKey && e.key === 'a') {
+        // Select all uncategorized
+        e.preventDefault();
+        document.querySelectorAll('.item-card:not(.categorized)').forEach(card => {
+          const index = parseInt(card.dataset.index);
+          selectedItems.add(index);
+          card.classList.add('selected');
+        });
+        updateSelectionInfo();
+        updateCategoryButtons();
+      }
+    });
+  </script>
+</body>
+</html>

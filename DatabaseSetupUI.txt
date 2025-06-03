@@ -1,0 +1,994 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <base target="_top">
+  <style>
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+    
+    body {
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+      background: #f5f7fa;
+      padding: 20px;
+      min-height: 100vh;
+    }
+    
+    .container {
+      max-width: 800px;
+      margin: 0 auto;
+      background: white;
+      border-radius: 16px;
+      box-shadow: 0 10px 40px rgba(0, 0, 0, 0.1);
+      overflow: hidden;
+    }
+    
+    .header {
+      background: linear-gradient(135deg, #1e3c72 0%, #2a5298 100%);
+      color: white;
+      padding: 40px 30px;
+      text-align: center;
+    }
+    
+    .header h1 {
+      font-size: 32px;
+      margin-bottom: 15px;
+      font-weight: 300;
+    }
+    
+    .header p {
+      font-size: 16px;
+      opacity: 0.9;
+      max-width: 500px;
+      margin: 0 auto;
+    }
+    
+    .steps-indicator {
+      display: flex;
+      justify-content: center;
+      padding: 30px;
+      background: #f8f9fa;
+      border-bottom: 1px solid #e9ecef;
+    }
+    
+    .step {
+      display: flex;
+      align-items: center;
+      margin: 0 20px;
+    }
+    
+    .step-number {
+      width: 36px;
+      height: 36px;
+      background: #e9ecef;
+      color: #6c757d;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-weight: 600;
+      margin-right: 12px;
+      transition: all 0.3s ease;
+    }
+    
+    .step.active .step-number {
+      background: #1e3c72;
+      color: white;
+      box-shadow: 0 4px 12px rgba(30, 60, 114, 0.3);
+    }
+    
+    .step.completed .step-number {
+      background: #28a745;
+      color: white;
+    }
+    
+    .step-label {
+      font-size: 14px;
+      color: #6c757d;
+      font-weight: 500;
+    }
+    
+    .step.active .step-label {
+      color: #1e3c72;
+      font-weight: 600;
+    }
+    
+    .content {
+      padding: 40px;
+    }
+    
+    /* Step 1: Sheet Selection */
+    .sheet-selection {
+      display: none;
+    }
+    
+    .sheet-selection.active {
+      display: block;
+    }
+    
+    .sheet-list {
+      background: #f8f9fa;
+      border-radius: 12px;
+      padding: 20px;
+      margin-bottom: 30px;
+      max-height: 400px;
+      overflow-y: auto;
+    }
+    
+    .loading-state {
+      text-align: center;
+      padding: 60px 20px;
+      color: #6c757d;
+    }
+    
+    .loading-spinner {
+      width: 50px;
+      height: 50px;
+      border: 4px solid #f3f3f3;
+      border-top: 4px solid #1e3c72;
+      border-radius: 50%;
+      animation: spin 1s linear infinite;
+      margin: 0 auto 20px;
+    }
+    
+    @keyframes spin {
+      0% { transform: rotate(0deg); }
+      100% { transform: rotate(360deg); }
+    }
+    
+    .empty-state {
+      text-align: center;
+      padding: 60px 20px;
+      color: #6c757d;
+    }
+    
+    .empty-state-icon {
+      font-size: 48px;
+      margin-bottom: 10px;
+      opacity: 0.5;
+    }
+    
+    .sheet-item {
+      padding: 15px 20px;
+      background: white;
+      border-radius: 8px;
+      margin-bottom: 10px;
+      cursor: pointer;
+      transition: all 0.2s ease;
+      display: flex;
+      align-items: center;
+      border: 2px solid transparent;
+      position: relative;
+    }
+    
+    .sheet-item:hover {
+      border-color: #1e3c72;
+      transform: translateX(5px);
+      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+    }
+    
+    .sheet-item.selected {
+      background: #e7f1ff;
+      border-color: #1e3c72;
+    }
+    
+    .sheet-icon {
+      width: 40px;
+      height: 40px;
+      background: #e9ecef;
+      border-radius: 8px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      margin-right: 15px;
+      font-size: 20px;
+    }
+    
+    .sheet-info {
+      flex: 1;
+    }
+    
+    .sheet-name {
+      font-weight: 600;
+      color: #333;
+      font-size: 16px;
+      margin-bottom: 4px;
+    }
+    
+    .sheet-meta {
+      font-size: 13px;
+      color: #6c757d;
+    }
+    
+    .check-icon {
+      position: absolute;
+      right: 20px;
+      width: 24px;
+      height: 24px;
+      background: #1e3c72;
+      color: white;
+      border-radius: 50%;
+      display: none;
+      align-items: center;
+      justify-content: center;
+    }
+    
+    .sheet-item.selected .check-icon {
+      display: flex;
+    }
+    
+    /* Step 2: Column Mapping */
+    .column-mapping {
+      display: none;
+    }
+    
+    .column-mapping.active {
+      display: block;
+    }
+    
+    .mapping-grid {
+      display: grid;
+      gap: 20px;
+    }
+    
+    .mapping-item {
+      background: #f8f9fa;
+      border-radius: 12px;
+      padding: 20px;
+      border: 2px solid #e9ecef;
+      transition: all 0.3s ease;
+    }
+    
+    .mapping-item:hover {
+      border-color: #1e3c72;
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
+    }
+    
+    .field-label {
+      font-weight: 600;
+      color: #333;
+      margin-bottom: 8px;
+      font-size: 16px;
+      display: flex;
+      align-items: center;
+    }
+    
+    .field-icon {
+      width: 24px;
+      height: 24px;
+      background: #1e3c72;
+      color: white;
+      border-radius: 4px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      margin-right: 10px;
+      font-size: 12px;
+    }
+    
+    .field-description {
+      font-size: 13px;
+      color: #6c757d;
+      margin-bottom: 12px;
+    }
+    
+    .column-selector {
+      position: relative;
+    }
+    
+    .column-input {
+      width: 100%;
+      padding: 12px 40px 12px 15px;
+      border: 2px solid #e9ecef;
+      border-radius: 8px;
+      font-size: 15px;
+      font-weight: 500;
+      text-transform: uppercase;
+      transition: all 0.3s ease;
+    }
+    
+    .column-input:focus {
+      outline: none;
+      border-color: #1e3c72;
+      box-shadow: 0 0 0 3px rgba(30, 60, 114, 0.1);
+    }
+    
+    .column-input.valid {
+      border-color: #28a745;
+      background: #f1f9f1;
+    }
+    
+    .column-dropdown {
+      position: absolute;
+      right: 10px;
+      top: 50%;
+      transform: translateY(-50%);
+      background: #e9ecef;
+      border: none;
+      padding: 8px 12px;
+      border-radius: 4px;
+      cursor: pointer;
+      font-size: 14px;
+      transition: all 0.2s ease;
+    }
+    
+    .column-dropdown:hover {
+      background: #dee2e6;
+    }
+    
+    .suggested-mapping {
+      font-size: 12px;
+      color: #1e3c72;
+      margin-top: 5px;
+      cursor: pointer;
+    }
+    
+    .suggested-mapping:hover {
+      text-decoration: underline;
+    }
+    
+    .preview-section {
+      margin-top: 40px;
+      padding: 20px;
+      background: #e7f1ff;
+      border-radius: 12px;
+      border: 1px solid #b8d4f1;
+    }
+    
+    .preview-title {
+      font-weight: 600;
+      color: #1e3c72;
+      margin-bottom: 15px;
+      font-size: 16px;
+    }
+    
+    .preview-table {
+      background: white;
+      border-radius: 8px;
+      overflow: hidden;
+      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+    }
+    
+    .preview-row {
+      display: grid;
+      grid-template-columns: repeat(6, 1fr);
+      padding: 12px;
+      border-bottom: 1px solid #e9ecef;
+      font-size: 13px;
+    }
+    
+    .preview-row.header {
+      background: #f8f9fa;
+      font-weight: 600;
+      color: #333;
+    }
+    
+    .preview-cell {
+      padding: 0 8px;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    
+    .button-group {
+      display: flex;
+      justify-content: space-between;
+      margin-top: 40px;
+      padding-top: 30px;
+      border-top: 1px solid #e9ecef;
+    }
+    
+    .btn {
+      padding: 12px 30px;
+      border: none;
+      border-radius: 8px;
+      font-size: 16px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.3s ease;
+    }
+    
+    .btn-secondary {
+      background: #e9ecef;
+      color: #495057;
+    }
+    
+    .btn-secondary:hover:not(:disabled) {
+      background: #dee2e6;
+    }
+    
+    .btn-primary {
+      background: linear-gradient(135deg, #1e3c72 0%, #2a5298 100%);
+      color: white;
+    }
+    
+    .btn-primary:hover:not(:disabled) {
+      transform: translateY(-2px);
+      box-shadow: 0 5px 15px rgba(30, 60, 114, 0.3);
+    }
+    
+    .btn:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+    }
+    
+    .success-message {
+      display: none;
+      text-align: center;
+      padding: 60px;
+    }
+    
+    .success-icon {
+      width: 80px;
+      height: 80px;
+      background: #28a745;
+      color: white;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 40px;
+      margin: 0 auto 20px;
+    }
+    
+    .success-title {
+      font-size: 24px;
+      font-weight: 600;
+      color: #333;
+      margin-bottom: 10px;
+    }
+    
+    .success-description {
+      font-size: 16px;
+      color: #6c757d;
+    }
+
+    .error-message {
+      background: #f8d7da;
+      color: #721c24;
+      padding: 12px 20px;
+      border-radius: 8px;
+      margin-bottom: 20px;
+      border: 1px solid #f5c6cb;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="header">
+      <h1>Project Database Setup</h1>
+      <p>Configure your main project database by selecting the source worksheet and mapping required columns</p>
+    </div>
+    
+    <div class="steps-indicator">
+      <div class="step active" id="step1">
+        <div class="step-number">1</div>
+        <div class="step-label">Select Worksheet</div>
+      </div>
+      <div class="step" id="step2">
+        <div class="step-number">2</div>
+        <div class="step-label">Map Columns</div>
+      </div>
+      <div class="step" id="step3">
+        <div class="step-number">3</div>
+        <div class="step-label">Complete</div>
+      </div>
+    </div>
+    
+    <div class="content">
+      <!-- Step 1: Sheet Selection -->
+      <div class="sheet-selection active" id="sheetSelectionStep">
+        <h2 style="margin-bottom: 20px;">Select Source Worksheet</h2>
+        <p style="color: #6c757d; margin-bottom: 30px;">
+          Choose the worksheet that contains your main project database
+        </p>
+        
+        <div class="sheet-list" id="sheetList">
+          <div class="loading-state">
+            <div class="loading-spinner"></div>
+            <p>Loading available worksheets...</p>
+          </div>
+        </div>
+        
+        <div class="button-group">
+          <button class="btn btn-secondary" onclick="cancel()">Cancel</button>
+          <button class="btn btn-primary" onclick="nextStep()" disabled id="nextBtn1">
+            Next: Map Columns
+          </button>
+        </div>
+      </div>
+      
+      <!-- Step 2: Column Mapping -->
+      <div class="column-mapping" id="columnMappingStep">
+        <h2 style="margin-bottom: 20px;">Map Data Columns</h2>
+        <p style="color: #6c757d; margin-bottom: 30px;">
+          Specify which column contains each required field
+        </p>
+        
+        <div class="mapping-grid">
+          <div class="mapping-item">
+            <div class="field-label">
+              <div class="field-icon">#</div>
+              Project Number
+            </div>
+            <div class="field-description">Unique identifier for each project</div>
+            <div class="column-selector">
+              <input type="text" class="column-input" id="col-projectNumber" 
+                     placeholder="Enter column letter" maxlength="2">
+              <button class="column-dropdown" onclick="showColumnHelper('projectNumber')">
+                A-Z
+              </button>
+            </div>
+            <div class="suggested-mapping" id="suggest-projectNumber" style="display: none;"></div>
+          </div>
+          
+          <div class="mapping-item">
+            <div class="field-label">
+              <div class="field-icon">📝</div>
+              Project Name
+            </div>
+            <div class="field-description">Descriptive name of the project</div>
+            <div class="column-selector">
+              <input type="text" class="column-input" id="col-projectName" 
+                     placeholder="Enter column letter" maxlength="2">
+              <button class="column-dropdown" onclick="showColumnHelper('projectName')">
+                A-Z
+              </button>
+            </div>
+            <div class="suggested-mapping" id="suggest-projectName" style="display: none;"></div>
+          </div>
+          
+          <div class="mapping-item">
+            <div class="field-label">
+              <div class="field-icon">💰</div>
+              EAC Cost
+            </div>
+            <div class="field-description">Estimate at Completion cost value</div>
+            <div class="column-selector">
+              <input type="text" class="column-input" id="col-eacCost" 
+                     placeholder="Enter column letter" maxlength="2">
+              <button class="column-dropdown" onclick="showColumnHelper('eacCost')">
+                A-Z
+              </button>
+            </div>
+            <div class="suggested-mapping" id="suggest-eacCost" style="display: none;"></div>
+          </div>
+          
+          <div class="mapping-item">
+            <div class="field-label">
+              <div class="field-icon">📊</div>
+              Budgeted Cost
+            </div>
+            <div class="field-description">Original budget amount</div>
+            <div class="column-selector">
+              <input type="text" class="column-input" id="col-budgetedCost" 
+                     placeholder="Enter column letter" maxlength="2">
+              <button class="column-dropdown" onclick="showColumnHelper('budgetedCost')">
+                A-Z
+              </button>
+            </div>
+            <div class="suggested-mapping" id="suggest-budgetedCost" style="display: none;"></div>
+          </div>
+          
+          <div class="mapping-item">
+            <div class="field-label">
+              <div class="field-icon">💱</div>
+              Project Currency
+            </div>
+            <div class="field-description">Currency code (EUR, USD, etc.)</div>
+            <div class="column-selector">
+              <input type="text" class="column-input" id="col-currency" 
+                     placeholder="Enter column letter" maxlength="2">
+              <button class="column-dropdown" onclick="showColumnHelper('currency')">
+                A-Z
+              </button>
+            </div>
+            <div class="suggested-mapping" id="suggest-currency" style="display: none;"></div>
+          </div>
+          
+          <div class="mapping-item">
+            <div class="field-label">
+              <div class="field-icon">📄</div>
+              Item Description
+            </div>
+            <div class="field-description">Description of line items for categorization</div>
+            <div class="column-selector">
+              <input type="text" class="column-input" id="col-itemDescription" 
+                     placeholder="Enter column letter" maxlength="2">
+              <button class="column-dropdown" onclick="showColumnHelper('itemDescription')">
+                A-Z
+              </button>
+            </div>
+            <div class="suggested-mapping" id="suggest-itemDescription" style="display: none;"></div>
+          </div>
+        </div>
+        
+        <div class="preview-section" id="previewSection" style="display: none;">
+          <div class="preview-title">Preview Mapping</div>
+          <div class="preview-table" id="previewTable">
+            <!-- Preview will be dynamically populated -->
+          </div>
+        </div>
+        
+        <div class="button-group">
+          <button class="btn btn-secondary" onclick="previousStep()">Back</button>
+          <button class="btn btn-primary" onclick="saveConfiguration()" disabled id="saveBtn">
+            Save Configuration
+          </button>
+        </div>
+      </div>
+      
+      <!-- Success Message -->
+      <div class="success-message" id="successStep">
+        <div class="success-icon">✓</div>
+        <div class="success-title">Configuration Saved Successfully!</div>
+        <div class="success-description">
+          Your project database is now configured and ready to use.
+        </div>
+        <button class="btn btn-primary" style="margin-top: 30px;" onclick="finish()">
+          Start Using Database
+        </button>
+      </div>
+    </div>
+  </div>
+  
+  <script>
+    let selectedSheet = null;
+    let availableSheets = [];
+    let sheetData = null;
+    let suggestedMappings = {};
+    
+    // Load sheets on startup
+    window.onload = function() {
+      loadAvailableSheets();
+    };
+    
+    function loadAvailableSheets() {
+      google.script.run
+        .withSuccessHandler(displaySheets)
+        .withFailureHandler(handleError)
+        .getAvailableSheets();
+    }
+    
+    function displaySheets(sheets) {
+      const sheetList = document.getElementById('sheetList');
+      
+      if (!sheets || sheets.length === 0) {
+        sheetList.innerHTML = `
+          <div class="empty-state">
+            <div class="empty-state-icon">📋</div>
+            <p>No suitable worksheets found</p>
+            <p style="font-size: 13px; margin-top: 10px; color: #6c757d;">
+              Valid sheets must not be summary sheets, comparison sheets, or system sheets.
+            </p>
+          </div>
+        `;
+        return;
+      }
+      
+      availableSheets = sheets;
+      sheetList.innerHTML = '';
+      
+      sheets.forEach((sheet, index) => {
+        const sheetItem = document.createElement('div');
+        sheetItem.className = 'sheet-item';
+        sheetItem.dataset.sheet = sheet.name;
+        sheetItem.onclick = function() { selectSheet(sheet.name); };
+        
+        // Choose icon based on sheet name
+        let icon = '📊';
+        if (sheet.name.toLowerCase().includes('master')) icon = '📋';
+        else if (sheet.name.toLowerCase().includes('data')) icon = '🗂️';
+        else if (sheet.name.toLowerCase().includes('project')) icon = '📁';
+        
+        sheetItem.innerHTML = `
+          <div class="sheet-icon">${icon}</div>
+          <div class="sheet-info">
+            <div class="sheet-name">${sheet.name}</div>
+            <div class="sheet-meta">${sheet.rowCount} rows × ${sheet.columnCount} columns</div>
+          </div>
+          <div class="check-icon">✓</div>
+        `;
+        
+        sheetList.appendChild(sheetItem);
+      });
+    }
+    
+    function selectSheet(sheetName) {
+      // Clear previous selection
+      document.querySelectorAll('.sheet-item').forEach(item => {
+        item.classList.remove('selected');
+      });
+      
+      // Set new selection
+      const selectedItem = document.querySelector(`[data-sheet="${sheetName}"]`);
+      if (selectedItem) {
+        selectedItem.classList.add('selected');
+        selectedSheet = sheetName;
+        document.getElementById('nextBtn1').disabled = false;
+      }
+    }
+    
+    function nextStep() {
+      if (!selectedSheet) return;
+      
+      // Show loading while getting sheet data
+      document.getElementById('nextBtn1').disabled = true;
+      document.getElementById('nextBtn1').textContent = 'Loading sheet data...';
+      
+      google.script.run
+        .withSuccessHandler(function(data) {
+          sheetData = data;
+          
+          // Get suggested mappings
+          google.script.run
+            .withSuccessHandler(function(suggestions) {
+              suggestedMappings = suggestions;
+              displaySuggestions();
+              
+              // Move to next step
+              document.getElementById('sheetSelectionStep').classList.remove('active');
+              document.getElementById('columnMappingStep').classList.add('active');
+              document.getElementById('step1').classList.remove('active');
+              document.getElementById('step1').classList.add('completed');
+              document.getElementById('step2').classList.add('active');
+              
+              // Reset button
+              document.getElementById('nextBtn1').disabled = false;
+              document.getElementById('nextBtn1').textContent = 'Next: Map Columns';
+              
+              // Show preview if we have data
+              if (data && data.data && data.data.length > 0) {
+                showPreview();
+              }
+            })
+            .withFailureHandler(function(error) {
+              console.error('Failed to get suggestions:', error);
+              // Continue without suggestions
+              moveToMappingStep();
+            })
+            .getSuggestedMappings(selectedSheet);
+        })
+        .withFailureHandler(function(error) {
+          handleError(error);
+          document.getElementById('nextBtn1').disabled = false;
+          document.getElementById('nextBtn1').textContent = 'Next: Map Columns';
+        })
+        .getSheetSampleData(selectedSheet);
+    }
+    
+    function moveToMappingStep() {
+      document.getElementById('sheetSelectionStep').classList.remove('active');
+      document.getElementById('columnMappingStep').classList.add('active');
+      document.getElementById('step1').classList.remove('active');
+      document.getElementById('step1').classList.add('completed');
+      document.getElementById('step2').classList.add('active');
+    }
+    
+    function displaySuggestions() {
+      const fields = ['projectNumber', 'projectName', 'eacCost', 'budgetedCost', 'currency', 'itemDescription'];
+      
+      fields.forEach(field => {
+        const suggestionEl = document.getElementById(`suggest-${field}`);
+        const inputEl = document.getElementById(`col-${field}`);
+        
+        if (suggestedMappings[field]) {
+          suggestionEl.style.display = 'block';
+          suggestionEl.innerHTML = `Suggested: Column ${suggestedMappings[field]}`;
+          suggestionEl.onclick = function() {
+            inputEl.value = suggestedMappings[field];
+            inputEl.classList.add('valid');
+            checkAllMappings();
+            updatePreview();
+          };
+        }
+      });
+    }
+    
+    function showPreview() {
+      if (!sheetData || !sheetData.data || sheetData.data.length < 2) return;
+      
+      const previewSection = document.getElementById('previewSection');
+      const previewTable = document.getElementById('previewTable');
+      
+      previewSection.style.display = 'block';
+      
+      // Create preview with actual data
+      let html = '<div class="preview-row header">';
+      html += '<div class="preview-cell">Project Number</div>';
+      html += '<div class="preview-cell">Project Name</div>';
+      html += '<div class="preview-cell">EAC Cost</div>';
+      html += '<div class="preview-cell">Budget</div>';
+      html += '<div class="preview-cell">Currency</div>';
+      html += '<div class="preview-cell">Item Desc</div>';
+      html += '</div>';
+      
+      // Show sample data row
+      if (sheetData.data[1]) {
+        html += '<div class="preview-row">';
+        
+        // Get column mappings
+        const mappings = {
+          projectNumber: document.getElementById('col-projectNumber').value,
+          projectName: document.getElementById('col-projectName').value,
+          eacCost: document.getElementById('col-eacCost').value,
+          budgetedCost: document.getElementById('col-budgetedCost').value,
+          currency: document.getElementById('col-currency').value,
+          itemDescription: document.getElementById('col-itemDescription').value
+        };
+        
+        // Display mapped values
+        Object.values(mappings).forEach(colLetter => {
+          let value = '';
+          if (colLetter) {
+            const colIndex = letterToColumn(colLetter) - 1;
+            value = sheetData.data[1][colIndex] || '';
+          }
+          html += `<div class="preview-cell">${value}</div>`;
+        });
+        
+        html += '</div>';
+      }
+      
+      previewTable.innerHTML = html;
+    }
+    
+    function previousStep() {
+      document.getElementById('columnMappingStep').classList.remove('active');
+      document.getElementById('sheetSelectionStep').classList.add('active');
+      document.getElementById('step2').classList.remove('active');
+      document.getElementById('step1').classList.remove('completed');
+      document.getElementById('step1').classList.add('active');
+    }
+    
+    // Column input validation
+    document.querySelectorAll('.column-input').forEach(input => {
+      input.addEventListener('input', function() {
+        this.value = this.value.toUpperCase();
+        if (/^[A-Z]{1,2}$/.test(this.value)) {
+          this.classList.add('valid');
+        } else {
+          this.classList.remove('valid');
+        }
+        checkAllMappings();
+        updatePreview();
+      });
+    });
+    
+    function checkAllMappings() {
+      const fields = ['projectNumber', 'projectName', 'eacCost', 'budgetedCost', 'currency', 'itemDescription'];
+      let allValid = true;
+      
+      fields.forEach(field => {
+        const input = document.getElementById(`col-${field}`);
+        if (!/^[A-Z]{1,2}$/.test(input.value)) {
+          allValid = false;
+        }
+      });
+      
+      document.getElementById('saveBtn').disabled = !allValid;
+    }
+    
+    function updatePreview() {
+      if (sheetData && sheetData.data && sheetData.data.length > 1) {
+        showPreview();
+      }
+    }
+    
+    function showColumnHelper(field) {
+      if (!sheetData || !sheetData.columns) {
+        alert('Please wait for sheet data to load');
+        return;
+      }
+      
+      let columnList = 'Available columns:\n\n';
+      sheetData.columns.forEach((col, index) => {
+        if (index < 26) { // Show first 26 columns
+          columnList += `${col.letter}: ${col.header || '(No header)'}\n`;
+        }
+      });
+      
+      const selected = prompt(columnList + '\nEnter column letter:');
+      if (selected && /^[A-Z]{1,2}$/i.test(selected)) {
+        document.getElementById(`col-${field}`).value = selected.toUpperCase();
+        document.getElementById(`col-${field}`).classList.add('valid');
+        checkAllMappings();
+        updatePreview();
+      }
+    }
+    
+    function saveConfiguration() {
+      // Validate sheet structure first
+      document.getElementById('saveBtn').disabled = true;
+      document.getElementById('saveBtn').textContent = 'Validating...';
+      
+      google.script.run
+        .withSuccessHandler(function(validation) {
+          if (!validation.valid) {
+            handleError({ message: validation.error });
+            document.getElementById('saveBtn').disabled = false;
+            document.getElementById('saveBtn').textContent = 'Save Configuration';
+            return;
+          }
+          
+          // Proceed with saving
+          performSave();
+        })
+        .withFailureHandler(function(error) {
+          handleError(error);
+          document.getElementById('saveBtn').disabled = false;
+          document.getElementById('saveBtn').textContent = 'Save Configuration';
+        })
+        .validateSheetStructure(selectedSheet);
+    }
+    
+    function performSave() {
+      // Collect all mappings
+      const mappings = {
+        sourceSheet: selectedSheet,
+        projectNumber: document.getElementById('col-projectNumber').value,
+        projectName: document.getElementById('col-projectName').value,
+        eacCost: document.getElementById('col-eacCost').value,
+        budgetedCost: document.getElementById('col-budgetedCost').value,
+        currency: document.getElementById('col-currency').value,
+        itemDescription: document.getElementById('col-itemDescription').value
+      };
+      
+      document.getElementById('saveBtn').textContent = 'Saving...';
+      
+      // Send to Google Apps Script
+      google.script.run
+        .withSuccessHandler(onConfigSaved)
+        .withFailureHandler(function(error) {
+          handleError(error);
+          document.getElementById('saveBtn').disabled = false;
+          document.getElementById('saveBtn').textContent = 'Save Configuration';
+        })
+        .saveConfiguration(mappings);
+    }
+    
+    function onConfigSaved() {
+      // Show success
+      document.getElementById('columnMappingStep').classList.remove('active');
+      document.getElementById('successStep').style.display = 'block';
+      document.getElementById('step2').classList.remove('active');
+      document.getElementById('step2').classList.add('completed');
+      document.getElementById('step3').classList.add('active');
+    }
+    
+    function handleError(error) {
+      console.error('Error:', error);
+      const errorDiv = document.createElement('div');
+      errorDiv.className = 'error-message';
+      errorDiv.textContent = 'Error: ' + (error.message || error.toString());
+      
+      // Insert at top of current step
+      const currentStep = document.querySelector('.sheet-selection.active, .column-mapping.active');
+      if (currentStep) {
+        currentStep.insertBefore(errorDiv, currentStep.firstChild);
+        
+        // Auto-remove after 5 seconds
+        setTimeout(() => errorDiv.remove(), 5000);
+      }
+    }
+    
+    function letterToColumn(letter) {
+      let column = 0;
+      for (let i = 0; i < letter.length; i++) {
+        column = column * 26 + letter.charCodeAt(i) - 'A'.charCodeAt(0) + 1;
+      }
+      return column;
+    }
+    
+    function cancel() {
+      google.script.host.close();
+    }
+    
+    function finish() {
+      google.script.host.close();
+    }
+  </script>
+</body>
+</html>

@@ -1,0 +1,273 @@
+// ============================================
+// Google Apps Script - Database Module with Integrated UI
+// ============================================
+
+function saveToDatabase() {
+    const ss = SpreadsheetApp.getActiveSpreadsheet();
+    const ui = SpreadsheetApp.getUi();
+    const summarySheet = ss.getActiveSheet();
+    
+    // Validate that this is a summary sheet
+    if (!summarySheet.getName().includes('Summary')) {
+      ui.alert('Please run this from a project summary sheet!');
+      return;
+    }
+    
+    // Get project details from summary
+    const projectNumber = summarySheet.getRange('C4').getValue();
+    const projectName = summarySheet.getRange('C3').getValue();
+    
+    // Check/Create database sheet
+    let dbSheet = ss.getSheetByName('Project Analysis Database');
+    if (!dbSheet) {
+      dbSheet = ss.insertSheet('Project Analysis Database');
+      initializeDatabase(dbSheet);
+    }
+    
+    // Check if project already exists
+    let existingRow = 0;
+    const lastRow = dbSheet.getLastRow();
+    
+    for (let i = 2; i <= lastRow; i++) {
+      if (dbSheet.getRange(i, 1).getValue() === projectNumber) {
+        existingRow = i;
+        break;
+      }
+    }
+    
+    if (existingRow > 0) {
+      const response = ui.alert('Project Exists',
+        'Project already exists in database. Overwrite?',
+        ui.ButtonSet.YES_NO);
+      
+      if (response !== ui.Button.YES) return;
+    }
+    
+    const newRow = existingRow || dbSheet.getLastRow() + 1;
+    
+    // Store current data in properties
+    PropertiesService.getScriptProperties().setProperty('SAVE_TO_DB_DATA', JSON.stringify({
+      projectNumber,
+      projectName,
+      summarySheetName: summarySheet.getName(),
+      dbRow: newRow
+    }));
+    
+    // Show save to database UI
+    const html = HtmlService.createHtmlOutputFromFile('SaveToDatabaseUI')
+      .setWidth(600)
+      .setHeight(700);
+    
+    ui.showModalDialog(html, 'Save Project to Database');
+  }
+  
+  // Process specs from UI and save to database
+  function saveProjectSpecs(formData) {
+    const props = PropertiesService.getScriptProperties();
+    const savedData = JSON.parse(props.getProperty('SAVE_TO_DB_DATA') || '{}');
+    
+    const ss = SpreadsheetApp.getActiveSpreadsheet();
+    const dbSheet = ss.getSheetByName('Project Analysis Database');
+    const summarySheet = ss.getSheetByName(savedData.summarySheetName);
+    
+    if (!dbSheet || !summarySheet) {
+      throw new Error('Database or summary sheet not found');
+    }
+    
+    // Extract and save all data
+    extractAndSaveData(summarySheet, dbSheet, savedData.dbRow, formData);
+    
+    // Clean up properties
+    props.deleteProperty('SAVE_TO_DB_DATA');
+    
+    return {success: true};
+  }
+  
+  function initializeDatabase(dbSheet) {
+    // Create headers
+    const headers = [
+      'Project Number',
+      'Project Name',
+      'Project Scope',
+      'EAC Cost (EUR)',
+      'Budgeted Cost (EUR)',
+      'Flowrate (m3/h)',
+      'Technology Type',
+      'Technology Details',
+      'Project Market',
+      'PM Labor %',
+      'ENG Labor %',
+      'Sourcing Labor %',
+      'Commissioning %',
+      'Membranes %',
+      'Tanks %',
+      'Chemical Dosing %',
+      'Valves and Instruments %',
+      'Skids %',
+      'Piping %',
+      'Control Material %',
+      'Electrical %',
+      'Post Ship/Spare Parts %',
+      'Freight %',
+      'Unallocated Costs %',
+      'Pumps %',
+      'Electrical and Software %',
+      'E&M Installation %',
+      'Blowers %',
+      'Third Party %',
+      'IX Resin %',
+      'Prefab %',
+      'RISK %',
+      'Mixers %',
+      'Diffusers %'
+    ];
+    
+    dbSheet.getRange(1, 1, 1, headers.length).setValues([headers]);
+    dbSheet.getRange(1, 1, 1, headers.length)
+      .setFontWeight('bold')
+      .setBackground('#C8C8C8');
+    
+    // Auto-resize columns
+    dbSheet.autoResizeColumns(1, headers.length);
+  }
+  
+  function extractAndSaveData(summarySheet, dbSheet, rowNum, formData) {
+    // Basic project info
+    dbSheet.getRange(rowNum, 1).setValue(summarySheet.getRange('C4').getValue()); // Project Number
+    dbSheet.getRange(rowNum, 2).setValue(summarySheet.getRange('C3').getValue()); // Project Name
+    dbSheet.getRange(rowNum, 3).setValue(formData.scope); // Project Scope
+    
+    // Find financial data
+    const lastRow = summarySheet.getLastRow();
+    let eacCost = 0;
+    let budgetCost = 0;
+    
+    for (let i = 1; i <= lastRow; i++) {
+      const cellValue = summarySheet.getRange(i, 1).getValue();
+      
+      if (cellValue.toString().includes('EAC Cost (kEUR)')) {
+        eacCost = parseFloat(summarySheet.getRange(i, 3).getValue()) * 1000;
+        dbSheet.getRange(rowNum, 4).setValue(eacCost);
+      } else if (cellValue.toString().includes('Budgeted Cost (kEUR)')) {
+        budgetCost = parseFloat(summarySheet.getRange(i, 3).getValue()) * 1000;
+        dbSheet.getRange(rowNum, 5).setValue(budgetCost);
+      }
+    }
+    
+    // Project specifications
+    dbSheet.getRange(rowNum, 6).setValue(parseFloat(formData.flowrate)); // Flowrate
+    dbSheet.getRange(rowNum, 7).setValue(formData.technology); // Technology Type
+    
+    // Technology details
+    let techDetails = '';
+    if (formData.techDetails) {
+      switch (formData.technology) {
+        case 'MBR':
+          techDetails = `Cassettes: ${formData.techDetails.cassettes || 0}`;
+          break;
+        case 'RO':
+          techDetails = `Skids: ${formData.techDetails.skids || 0}`;
+          break;
+        case 'UF':
+          techDetails = `Skids: ${formData.techDetails.skids || 0}`;
+          break;
+        case 'EDR':
+          techDetails = `Stacks: ${formData.techDetails.stacks || 0}`;
+          break;
+        case 'Complex':
+          techDetails = formData.techDetails.technologies || '';
+          break;
+      }
+    }
+    dbSheet.getRange(rowNum, 8).setValue(techDetails);
+    dbSheet.getRange(rowNum, 9).setValue(formData.market); // Project Market
+    
+    // Extract subcategory cost ratios
+    const percentageHeaders = {
+      'PM Labor': 10,
+      'ENG Labor': 11,
+      'Sourcing Labor': 12,
+      'Commissioning': 13,
+      'Membranes': 14,
+      'Tanks': 15,
+      'Chemical Dosing': 16,
+      'Valves and Instruments': 17,
+      'Skids': 18,
+      'Piping': 19,
+      'Control Material': 20,
+      'Electrical': 21,
+      'Post Ship/Spare Parts': 22,
+      'Freight': 23,
+      'Unallocated Costs': 24,
+      'Pumps': 25,
+      'Electrical and Software': 26,
+      'E&M Installation': 27,
+      'Blowers': 28,
+      'Third Party': 29,
+      'IX Resin': 30,
+      'Prefab': 31,
+      'RISK': 32,
+      'Mixers': 33,
+      'Diffusers': 34
+    };
+    
+    // Extract percentages from summary sheet
+    for (let i = 1; i <= lastRow; i++) {
+      const cellB = summarySheet.getRange(i, 2).getValue().toString().trim();
+      
+      if (cellB) {
+        // Check if this subcategory matches any in our list
+        for (const [subcategory, colIndex] of Object.entries(percentageHeaders)) {
+          if (cellB.includes(subcategory)) {
+            const percentage = summarySheet.getRange(i, 4).getValue();
+            if (percentage) {
+              dbSheet.getRange(rowNum, colIndex).setValue(percentage);
+            }
+            break;
+          }
+        }
+      }
+    }
+    
+    // Format the row
+    dbSheet.getRange(rowNum, 4, 1, 2).setNumberFormat('#,##0');
+    dbSheet.getRange(rowNum, 6).setNumberFormat('#,##0');
+    dbSheet.getRange(rowNum, 10, 1, 25).setNumberFormat('0.0%');
+  }
+  
+  // Setup main project database configuration
+  function setupMainProjectDatabase() {
+    const html = HtmlService.createHtmlOutputFromFile('DatabaseSetupUI')
+      .setWidth(800)
+      .setHeight(700);
+    
+    SpreadsheetApp.getUi().showModalDialog(html, 'Database Configuration');
+  }
+  
+  // Save database configuration from UI
+  function saveConfiguration(mappings) {
+    const props = PropertiesService.getDocumentProperties();
+    
+    // Save configuration
+    props.setProperty('CONFIG_SOURCE_SHEET', mappings.sourceSheet);
+    props.setProperty('CONFIG_PROJECT_NUMBER', mappings.projectNumber);
+    props.setProperty('CONFIG_PROJECT_NAME', mappings.projectName);
+    props.setProperty('CONFIG_EAC_COST', mappings.eacCost);
+    props.setProperty('CONFIG_BUDGETED_COST', mappings.budgetedCost);
+    props.setProperty('CONFIG_CURRENCY', mappings.currency);
+    props.setProperty('CONFIG_ITEM_DESCRIPTION', mappings.itemDescription);
+    
+    return {success: true};
+  }
+  
+  // Get project data from save to database UI
+  function getProjectDataForSaveUI() {
+    const props = PropertiesService.getScriptProperties();
+    const savedData = JSON.parse(props.getProperty('SAVE_TO_DB_DATA') || '{}');
+    
+    return {
+      projectName: savedData.projectName || 'Unknown Project',
+      projectNumber: savedData.projectNumber || 'Unknown'
+    };
+  }
+  

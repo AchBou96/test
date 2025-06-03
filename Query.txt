@@ -1,0 +1,433 @@
+// ============================================
+// Google Apps Script - Query Builder Module with Integrated UI
+// ============================================
+
+function launchQueryBuilder() {
+    const ss = SpreadsheetApp.getActiveSpreadsheet();
+    const dbSheet = ss.getSheetByName('Project Analysis Database');
+    
+    if (!dbSheet) {
+      SpreadsheetApp.getUi().alert('No analysis database found. Please analyze projects first.');
+      return;
+    }
+    
+    if (!dbSheet.getRange('A2').getValue()) {
+      SpreadsheetApp.getUi().alert('No projects in database. Please analyze projects first.');
+      return;
+    }
+    
+    // Create HTML dialog for query builder
+    const html = HtmlService.createHtmlOutputFromFile('QueryBuilderUI')
+      .setWidth(800)
+      .setHeight(600);
+    
+    SpreadsheetApp.getUi().showModalDialog(html, 'Advanced Query Builder');
+  }
+  
+  // Get database fields for query builder
+  function getDatabaseFields() {
+    const dbSheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName('Project Analysis Database');
+    if (!dbSheet) return [];
+    
+    const headers = dbSheet.getRange(1, 1, 1, dbSheet.getLastColumn()).getValues()[0];
+    return headers.filter(h => h);
+  }
+  
+  // Execute query from the dialog
+  function executeQueryFromDialog(conditions) {
+    const ss = SpreadsheetApp.getActiveSpreadsheet();
+    const dbSheet = ss.getSheetByName('Project Analysis Database');
+    
+    if (!dbSheet) return {success: false, message: 'Database not found'};
+    
+    const results = [];
+    const lastRow = dbSheet.getLastRow();
+    
+    // Check each project against conditions
+    for (let i = 2; i <= lastRow; i++) {
+      if (evaluateConditions(dbSheet, i, conditions)) {
+        results.push(i);
+      }
+    }
+    
+    // Create results sheet
+    displayQueryResults(dbSheet, results, conditions);
+    
+    return {
+      success: true,
+      count: results.length,
+      message: `Found ${results.length} project(s) matching the criteria.`
+    };
+  }
+  
+  function evaluateConditions(dbSheet, rowNum, conditions) {
+    if (conditions.length === 0) return false;
+    
+    let result = true;
+    let isFirst = true;
+    
+    for (const condition of conditions) {
+      // Find field column
+      let fieldCol = 0;
+      const lastCol = dbSheet.getLastColumn();
+      
+      for (let i = 1; i <= lastCol; i++) {
+        if (dbSheet.getRange(1, i).getValue() === condition.field) {
+          fieldCol = i;
+          break;
+        }
+      }
+      
+      if (fieldCol === 0) continue;
+      
+      const fieldValue = dbSheet.getRange(rowNum, fieldCol).getValue();
+      const tempResult = evaluateSingleCondition(fieldValue, condition.operator, 
+                                                 condition.value, condition.valueTo);
+      
+      if (isFirst) {
+        result = tempResult;
+        isFirst = false;
+      } else {
+        if (condition.logic === 'AND') {
+          result = result && tempResult;
+        } else {
+          result = result || tempResult;
+        }
+      }
+    }
+    
+    return result;
+  }
+  
+  function evaluateSingleCondition(fieldValue, operator, value1, value2) {
+    const strFieldValue = String(fieldValue);
+    const strValue1 = String(value1);
+    
+    switch (operator) {
+      case '=':
+        return strFieldValue === strValue1;
+        
+      case '<>':
+        return strFieldValue !== strValue1;
+        
+      case '>':
+        return !isNaN(fieldValue) && !isNaN(value1) && parseFloat(fieldValue) > parseFloat(value1);
+        
+      case '<':
+        return !isNaN(fieldValue) && !isNaN(value1) && parseFloat(fieldValue) < parseFloat(value1);
+        
+      case '>=':
+        return !isNaN(fieldValue) && !isNaN(value1) && parseFloat(fieldValue) >= parseFloat(value1);
+        
+      case '<=':
+        return !isNaN(fieldValue) && !isNaN(value1) && parseFloat(fieldValue) <= parseFloat(value1);
+        
+      case 'LIKE':
+        return strFieldValue.toUpperCase().includes(strValue1.toUpperCase());
+        
+      case 'NOT LIKE':
+        return !strFieldValue.toUpperCase().includes(strValue1.toUpperCase());
+        
+      case 'BETWEEN':
+        if (!isNaN(fieldValue) && !isNaN(value1) && !isNaN(value2)) {
+          const numValue = parseFloat(fieldValue);
+          return numValue >= parseFloat(value1) && numValue <= parseFloat(value2);
+        }
+        return false;
+        
+      case 'IN':
+        const values = strValue1.split(',').map(v => v.trim());
+        return values.includes(strFieldValue.trim());
+        
+      default:
+        return false;
+    }
+  }
+  
+  function displayQueryResults(dbSheet, results, conditions) {
+    const ss = SpreadsheetApp.getActiveSpreadsheet();
+    const querySheet = createOrClearSheet('Query Results');
+    
+    // Header
+    querySheet.getRange('A1').setValue('QUERY RESULTS');
+    querySheet.getRange('A1').setFontSize(16).setFontWeight('bold');
+    
+    // Show conditions
+    let currentRow = 3;
+    querySheet.getRange(`A${currentRow}`).setValue('Query Conditions:').setFontWeight('bold');
+    currentRow++;
+    
+    for (const condition of conditions) {
+      const conditionText = `${condition.logic || ''} ${condition.field} ${condition.operator} ${condition.value} ${condition.valueTo || ''}`;
+      querySheet.getRange(`A${currentRow}`).setValue(conditionText);
+      currentRow++;
+    }
+    
+    currentRow += 2;
+    
+    if (results.length === 0) {
+      querySheet.getRange(`A${currentRow}`).setValue('No projects found matching the query criteria.');
+      querySheet.getRange(`A${currentRow}`).setFontStyle('italic');
+      ss.setActiveSheet(querySheet);
+      return;
+    }
+    
+    // Display result count
+    querySheet.getRange(`A${currentRow}`).setValue(`Found ${results.length} project(s):`);
+    querySheet.getRange(`A${currentRow}`).setFontWeight('bold');
+    currentRow += 2;
+    
+    // Copy headers
+    const lastCol = dbSheet.getLastColumn();
+    const headers = dbSheet.getRange(1, 1, 1, lastCol).getValues();
+    querySheet.getRange(currentRow, 1, 1, lastCol).setValues(headers);
+    querySheet.getRange(currentRow, 1, 1, lastCol).setFontWeight('bold').setBackground('#C8C8C8');
+    
+    // Copy matching rows
+    for (const resultRow of results) {
+      currentRow++;
+      const rowData = dbSheet.getRange(resultRow, 1, 1, lastCol).getValues();
+      querySheet.getRange(currentRow, 1, 1, lastCol).setValues(rowData);
+      
+      // Apply number formatting
+      querySheet.getRange(currentRow, 4, 1, 2).setNumberFormat('#,##0'); // EAC and Budget
+      querySheet.getRange(currentRow, 6).setNumberFormat('#,##0'); // Flowrate
+      if (lastCol >= 10) {
+        querySheet.getRange(currentRow, 10, 1, lastCol - 9).setNumberFormat('0.0%'); // Percentages
+      }
+    }
+    
+    // Add borders
+    querySheet.getRange(currentRow - results.length, 1, results.length + 1, lastCol)
+      .setBorder(true, true, true, true, true, true);
+    
+    // Auto-resize columns
+    querySheet.autoResizeColumns(1, lastCol);
+    
+    // Add summary statistics
+    currentRow += 3;
+    querySheet.getRange(`A${currentRow}`).setValue('SUMMARY STATISTICS');
+    querySheet.getRange(`A${currentRow}`).setFontWeight('bold');
+    querySheet.getRange(`A${currentRow}:D${currentRow}`).setBackground('#C8C8C8');
+    
+    currentRow++;
+    querySheet.getRange(`A${currentRow}`).setValue('Total Projects:');
+    querySheet.getRange(`B${currentRow}`).setValue(results.length);
+    
+    // Calculate total EAC
+    let totalEAC = 0;
+    for (const resultRow of results) {
+      totalEAC += parseFloat(dbSheet.getRange(resultRow, 4).getValue() || 0);
+    }
+    
+    currentRow++;
+    querySheet.getRange(`A${currentRow}`).setValue('Total EAC Cost (EUR):');
+    querySheet.getRange(`B${currentRow}`).setValue(totalEAC).setNumberFormat('#,##0');
+    
+    currentRow++;
+    querySheet.getRange(`A${currentRow}`).setValue('Average EAC Cost (EUR):');
+    querySheet.getRange(`B${currentRow}`).setValue(totalEAC / results.length).setNumberFormat('#,##0');
+    
+    // Make sheet active
+    ss.setActiveSheet(querySheet);
+  }
+  
+  // Pre-built queries
+  function queryHighCostProjects() {
+    executeQueryFromDialog([{
+      field: 'EAC Cost (EUR)',
+      operator: '>',
+      value: '1000000'
+    }]);
+  }
+  
+  function queryOverBudgetProjects() {
+    const dbSheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName('Project Analysis Database');
+    if (!dbSheet) return;
+    
+    const results = [];
+    const lastRow = dbSheet.getLastRow();
+    
+    for (let i = 2; i <= lastRow; i++) {
+      const eac = parseFloat(dbSheet.getRange(i, 4).getValue() || 0);
+      const budget = parseFloat(dbSheet.getRange(i, 5).getValue() || 0);
+      if (eac > budget) {
+        results.push(i);
+      }
+    }
+    
+    displayQueryResults(dbSheet, results, [{field: 'Custom', operator: 'EAC > Budget'}]);
+  }
+  
+  function queryMBRProjects() {
+    executeQueryFromDialog([{
+      field: 'Technology Type',
+      operator: '=',
+      value: 'MBR'
+    }]);
+  }
+  
+  function queryComplexProjects() {
+    executeQueryFromDialog([{
+      field: 'Technology Type',
+      operator: '=',
+      value: 'Complex'
+    }]);
+  }
+  
+  function queryHighFlowrateProjects() {
+    executeQueryFromDialog([{
+      field: 'Flowrate (m3/h)',
+      operator: '>',
+      value: '500'
+    }]);
+  }
+  
+  function queryByMarket() {
+    const ui = SpreadsheetApp.getUi();
+    const response = ui.prompt('Query by Market',
+      'Enter market to search for:\n\nExamples: Pharmaceutical, Municipal, HPI, Data Center, etc.',
+      ui.ButtonSet.OK_CANCEL);
+    
+    if (response.getSelectedButton() === ui.Button.OK) {
+      executeQueryFromDialog([{
+        field: 'Project Market',
+        operator: 'LIKE',
+        value: response.getResponseText()
+      }]);
+    }
+  }
+  
+  function queryHighEquipmentRatio() {
+    const dbSheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName('Project Analysis Database');
+    if (!dbSheet) return;
+    
+    const results = [];
+    const lastRow = dbSheet.getLastRow();
+    
+    for (let i = 2; i <= lastRow; i++) {
+      let laborTotal = 0;
+      
+      // Sum labor percentages (columns 10-13)
+      for (let col = 10; col <= 13; col++) {
+        const value = dbSheet.getRange(i, col).getValue();
+        if (!isNaN(value)) {
+          laborTotal += parseFloat(value);
+        }
+      }
+      
+      const equipmentTotal = 1 - laborTotal;
+      
+      if (equipmentTotal > 0.7) {
+        results.push(i);
+      }
+    }
+    
+    displayQueryResults(dbSheet, results, [{field: 'Custom', operator: 'Equipment > 70%'}]);
+  }
+  
+  function queryByScope() {
+    const ui = SpreadsheetApp.getUi();
+    const response = ui.prompt('Query by Scope',
+      'Enter project scope to search for:\n\nOptions: EP or EP+',
+      ui.ButtonSet.OK_CANCEL);
+    
+    if (response.getSelectedButton() === ui.Button.OK) {
+      executeQueryFromDialog([{
+        field: 'Project Scope',
+        operator: '=',
+        value: response.getResponseText().toUpperCase()
+      }]);
+    }
+  }
+  
+  // Save and load queries
+  function saveQueryDefinition(queryName, conditions) {
+    const props = PropertiesService.getDocumentProperties();
+    const savedQueries = JSON.parse(props.getProperty('SAVED_QUERIES') || '{}');
+    
+    savedQueries[queryName] = {
+      name: queryName,
+      date: new Date().toISOString(),
+      conditions: conditions
+    };
+    
+    props.setProperty('SAVED_QUERIES', JSON.stringify(savedQueries));
+    return {success: true};
+  }
+  
+  function getSavedQueries() {
+    const props = PropertiesService.getDocumentProperties();
+    const savedQueries = JSON.parse(props.getProperty('SAVED_QUERIES') || '{}');
+    return Object.values(savedQueries);
+  }
+  
+  function loadSavedQuery() {
+    const ui = SpreadsheetApp.getUi();
+    const savedQueries = getSavedQueries();
+    
+    if (savedQueries.length === 0) {
+      ui.alert('No saved queries found.');
+      return;
+    }
+    
+    let queryList = 'Saved queries:\n\n';
+    savedQueries.forEach((query, index) => {
+      const date = new Date(query.date).toLocaleDateString();
+      queryList += `${index + 1}. ${query.name} (Saved: ${date})\n`;
+    });
+    
+    queryList += '\nEnter query number:';
+    
+    const response = ui.prompt('Load Query', queryList, ui.ButtonSet.OK_CANCEL);
+    if (response.getSelectedButton() !== ui.Button.OK) return;
+    
+    const queryIndex = parseInt(response.getResponseText()) - 1;
+    if (queryIndex < 0 || queryIndex >= savedQueries.length) {
+      ui.alert('Invalid selection.');
+      return;
+    }
+    
+    const query = savedQueries[queryIndex];
+    executeQueryFromDialog(query.conditions);
+  }
+  
+  // Currency conversion dialog
+  function showCurrencyConversionDialog(currency, projectNumber) {
+    PropertiesService.getScriptProperties().setProperty('CURRENCY_CONVERSION_DATA', JSON.stringify({
+      currency,
+      projectNumber
+    }));
+    
+    const html = HtmlService.createHtmlOutputFromFile('CurrencyConversionUI')
+      .setWidth(500)
+      .setHeight(600);
+    
+    const ui = SpreadsheetApp.getUi();
+    ui.showModalDialog(html, 'Currency Conversion Required');
+  }
+  
+  // Apply exchange rate from UI
+  function applyExchangeRate(rate) {
+    const props = PropertiesService.getScriptProperties();
+    const data = JSON.parse(props.getProperty('CURRENCY_CONVERSION_DATA') || '{}');
+    
+    // Store rate for current analysis
+    props.setProperty('EXCHANGE_RATE_' + data.projectNumber, rate.toString());
+    
+    // Clean up
+    props.deleteProperty('CURRENCY_CONVERSION_DATA');
+    
+    return {success: true};
+  }
+  
+  // Get currency data for UI
+  function getCurrencyDataForUI() {
+    const props = PropertiesService.getScriptProperties();
+    const data = JSON.parse(props.getProperty('CURRENCY_CONVERSION_DATA') || '{}');
+    
+    return {
+      currency: data.currency || 'USD',
+      projectNumber: data.projectNumber || ''
+    };
+  }

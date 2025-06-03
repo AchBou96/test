@@ -1,0 +1,336 @@
+// ============================================
+// Google Apps Script - Main Structure & Configuration
+// ============================================
+
+// Main menu creation - runs when spreadsheet opens
+function onOpen() {
+    const ui = SpreadsheetApp.getUi();
+    
+    ui.createMenu('Project Analysis Tool')
+      .addItem('Setup Main Project Database', 'setupMainProjectDatabase')
+      .addItem('Analyze Project', 'analyzeProject')
+      .addItem('Compare Projects', 'compareProjects')
+      .addItem('Save to Database', 'saveToDatabase')
+      .addItem('View Analysis Database', 'viewAnalysisDatabase')
+      .addSeparator()
+      .addSubMenu(ui.createMenu('Query Builder')
+        .addItem('Launch Query Builder', 'launchQueryBuilder')
+        .addItem('Load Saved Query', 'loadSavedQuery'))
+      .addSeparator()
+      .addSubMenu(ui.createMenu('Export Reports')
+        .addItem('Export Individual Summaries (Excel)', 'exportIndividualSummariesExcel')
+        .addItem('Export Individual Summaries (PDF)', 'exportIndividualSummariesPDF')
+        .addItem('Create Portfolio Report', 'createPortfolioReport')
+        .addItem('Create Executive Dashboard', 'createExecutiveDashboard')
+        .addItem('Export Key Metrics Table', 'exportKeyMetricsTable')
+        .addItem('Custom Selection Export', 'customSelectionExport'))
+      .addSeparator()
+      .addItem('About', 'showAbout')
+      .addToUi();
+  }
+  
+  // Configuration Module
+  // ============================================
+  
+  function setupMainProjectDatabase() {
+    const ss = SpreadsheetApp.getActiveSpreadsheet();
+    const ui = SpreadsheetApp.getUi();
+    
+    // Check if configuration already exists
+    const configExists = PropertiesService.getDocumentProperties().getProperty('CONFIG_SOURCE_SHEET');
+    
+    if (configExists) {
+      const response = ui.alert('Configuration Exists', 
+        'Configuration already exists. Do you want to reconfigure?', 
+        ui.ButtonSet.YES_NO);
+      if (response !== ui.Button.YES) return;
+    }
+    
+    // Show HTML dialog for configuration
+    const html = HtmlService.createHtmlOutputFromFile('DatabaseSetupUI')
+      .setWidth(800)
+      .setHeight(700);
+    
+    ui.showModalDialog(html, 'Project Database Setup');
+  }
+  
+  // Function called from UI to save configuration
+  function saveConfiguration(mappings) {
+    try {
+      const props = PropertiesService.getDocumentProperties();
+      
+      // Save all mappings
+      props.setProperty('CONFIG_SOURCE_SHEET', mappings.sourceSheet);
+      props.setProperty('CONFIG_PROJECT_NUMBER', mappings.projectNumber);
+      props.setProperty('CONFIG_PROJECT_NAME', mappings.projectName);
+      props.setProperty('CONFIG_EAC_COST', mappings.eacCost);
+      props.setProperty('CONFIG_BUDGETED_COST', mappings.budgetedCost);
+      props.setProperty('CONFIG_CURRENCY', mappings.currency);
+      props.setProperty('CONFIG_ITEM_DESCRIPTION', mappings.itemDescription);
+      
+      return { success: true };
+    } catch (error) {
+      throw new Error('Failed to save configuration: ' + error.toString());
+    }
+  }
+  
+  // Get available sheets for UI
+  function getAvailableSheets() {
+    const ss = SpreadsheetApp.getActiveSpreadsheet();
+    const sheets = ss.getSheets();
+    const validSheets = [];
+    
+    sheets.forEach(sheet => {
+      const name = sheet.getName();
+      if (!['ConfigData', 'Main Menu', 'Project Analysis Database'].includes(name) && 
+          !name.includes('Summary') && !name.includes('Comparison')) {
+        validSheets.push({
+          name: name,
+          rowCount: sheet.getLastRow(),
+          columnCount: sheet.getLastColumn()
+        });
+      }
+    });
+    
+    return validSheets;
+  }
+  
+  // Get sample data from selected sheet
+  function getSheetSampleData(sheetName) {
+    const ss = SpreadsheetApp.getActiveSpreadsheet();
+    const sheet = ss.getSheetByName(sheetName);
+    
+    if (!sheet) return null;
+    
+    // Get first 5 rows as sample
+    const sampleRows = Math.min(5, sheet.getLastRow());
+    const sampleCols = Math.min(26, sheet.getLastColumn()); // Up to column Z
+    
+    if (sampleRows < 1 || sampleCols < 1) return null;
+    
+    const sampleData = sheet.getRange(1, 1, sampleRows, sampleCols).getValues();
+    
+    // Get column letters
+    const columns = [];
+    for (let i = 0; i < sampleCols; i++) {
+      columns.push({
+        letter: columnToLetter(i + 1),
+        header: sampleData[0][i] || '',
+        sample: sampleData[1] ? sampleData[1][i] : ''
+      });
+    }
+    
+    return {
+      columns: columns,
+      rowCount: sheet.getLastRow(),
+      data: sampleData
+    };
+  }
+  
+  function isValidColumn(col) {
+    return /^[A-Z]{1,2}$/.test(col);
+  }
+  
+  function getConfig() {
+    const props = PropertiesService.getDocumentProperties();
+    const sourceSheet = props.getProperty('CONFIG_SOURCE_SHEET');
+    
+    if (!sourceSheet) return null;
+    
+    return {
+      SourceSheet: sourceSheet,
+      ProjectNumber: props.getProperty('CONFIG_PROJECT_NUMBER'),
+      ProjectName: props.getProperty('CONFIG_PROJECT_NAME'),
+      EACCost: props.getProperty('CONFIG_EAC_COST'),
+      BudgetedCost: props.getProperty('CONFIG_BUDGETED_COST'),
+      Currency: props.getProperty('CONFIG_CURRENCY'),
+      ItemDescription: props.getProperty('CONFIG_ITEM_DESCRIPTION')
+    };
+  }
+  
+  // Helper Functions
+  // ============================================
+  
+  function letterToColumn(letter) {
+    let column = 0;
+    for (let i = 0; i < letter.length; i++) {
+      column = column * 26 + letter.charCodeAt(i) - 'A'.charCodeAt(0) + 1;
+    }
+    return column;
+  }
+  
+  function columnToLetter(column) {
+    let letter = '';
+    while (column > 0) {
+      const modulo = (column - 1) % 26;
+      letter = String.fromCharCode(65 + modulo) + letter;
+      column = Math.floor((column - modulo) / 26);
+    }
+    return letter;
+  }
+  
+  function getCellValue(sheet, row, columnLetter) {
+    const col = letterToColumn(columnLetter);
+    return sheet.getRange(row, col).getValue();
+  }
+  
+  function setCellValue(sheet, row, columnLetter, value) {
+    const col = letterToColumn(columnLetter);
+    sheet.getRange(row, col).setValue(value);
+  }
+  
+  // Category Keywords Definition
+  function getCategoryKeywords() {
+    return {
+      'LABOR': {
+        'PM Labor': ['PM LABOR', 'PROJECT MANAGE'],
+        'ENG Labor': ['ENG LABOR', 'ENGINEERING'],
+        'Sourcing Labor': ['SOURCING LABOR', 'PROCUREMENT'],
+        'Commissioning': ['COMMISSIONING', 'STARTUP']
+      },
+      'EQUIPMENTS': {
+        'Membranes': ['MEMBRANE', 'UF MODULE', 'RO ELEMENT'],
+        'Tanks': ['TANK', 'VESSEL'],
+        'Chemical Dosing': ['CHEMICAL DOSING', 'DOSING SYSTEM'],
+        'Valves and Instruments': ['VALVE', 'INSTRUMENT', 'METER', 'SENSOR'],
+        'Skids': ['SKID', 'PREFAB UNIT'],
+        'Piping': ['PIPE', 'FITTING', 'FLANGE'],
+        'Control Material': ['CONTROL MATERIAL', 'PLC', 'HMI', 'PANEL'],
+        'Electrical': ['ELECTRICAL MATERIAL', 'CABLE', 'TRANSFORMER'],
+        'Post Ship/Spare Parts': ['SPARE PART', 'POST SHIP'],
+        'Freight': ['FREIGHT', 'SHIPPING', 'TRANSPORT'],
+        'Unallocated Costs': ['UNALLOCATED COST', 'CONTINGENCY'],
+        'Pumps': ['PUMP', 'CENTRIFUGAL'],
+        'Electrical and Software': ['ELECTRICAL SOFTWARE', 'PROGRAMMING', 'AUTOMATION SOFTWARE'],
+        'E&M Installation': ['E&M INSTALL', 'MECHANICAL INSTALLATION', 'SITE WORK'],
+        'Blowers': ['BLOWER', 'AIR BLOWER'],
+        'Third Party': ['THIRD PARTY', 'SUBCONTRACTOR SERVICE'],
+        'IX Resin': ['ION EXCHANGE RESIN', 'RESIN'],
+        'Prefab': ['PREFABRICATED GATES', 'STEEL STRUCTURE'],
+        'RISK': ['RISK PROVISION', 'PROJECT RISK'],
+        'Mixers': ['MIXER', 'AGITATOR'],
+        'Diffusers': ['DIFFUSER', 'AERATION']
+      }
+    };
+  }
+  
+  // About Dialog
+  function showAbout() {
+    const ui = SpreadsheetApp.getUi();
+    const message = `Project Financial Analysis & Comparison Tool
+  
+  Version 2.0 - Google Sheets Edition
+  
+  This tool provides comprehensive project financial analysis and comparison capabilities.
+  
+  Features:
+  • One-time database configuration
+  • Automated item categorization  
+  • Currency conversion to EUR
+  • Dynamic financial summaries in kEUR
+  • Technology specifications tracking
+  • Budget bridge waterfall charts
+  • Multi-project comparison
+  • Professional reporting with ratios
+  • Query builder for data analysis
+  • Multiple export options
+  
+  Converted from Excel VBA to Google Apps Script`;
+  
+    ui.alert('About', message, ui.ButtonSet.OK);
+  }
+  
+  // View Analysis Database
+  function viewAnalysisDatabase() {
+    const ss = SpreadsheetApp.getActiveSpreadsheet();
+    const dbSheet = ss.getSheetByName('Project Analysis Database');
+    
+    if (!dbSheet) {
+      SpreadsheetApp.getUi().alert('No analysis database found. Please analyze projects first.');
+      return;
+    }
+    
+    ss.setActiveSheet(dbSheet);
+  }
+  
+  // Utility function to format numbers
+  function formatNumber(value, format) {
+    if (format === '#,##0') {
+      return value.toLocaleString('en-US', {maximumFractionDigits: 0});
+    } else if (format === '#,##0.0') {
+      return value.toLocaleString('en-US', {minimumFractionDigits: 1, maximumFractionDigits: 1});
+    } else if (format === '#,##0.00') {
+      return value.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2});
+    } else if (format === '0.0%') {
+      return (value * 100).toFixed(1) + '%';
+    }
+    return value;
+  }
+  
+  // Create a sheet if it doesn't exist
+  function createOrClearSheet(sheetName) {
+    const ss = SpreadsheetApp.getActiveSpreadsheet();
+    let sheet = ss.getSheetByName(sheetName);
+    
+    if (sheet) {
+      sheet.clear();
+    } else {
+      sheet = ss.insertSheet(sheetName);
+    }
+    
+    return sheet;
+  }
+  
+  // DatabaseSetupUI.html integration functions
+  // These functions are called from the UI and weren't in the original module
+  
+  function validateColumnMappings(mappings) {
+    // Validate that all required columns are mapped
+    const required = ['projectNumber', 'projectName', 'eacCost', 'budgetedCost', 'currency', 'itemDescription'];
+    
+    for (const field of required) {
+      if (!mappings[field] || !isValidColumn(mappings[field])) {
+        return { valid: false, error: `Invalid column mapping for ${field}` };
+      }
+    }
+    
+    // Validate that source sheet exists
+    const ss = SpreadsheetApp.getActiveSpreadsheet();
+    const sheet = ss.getSheetByName(mappings.sourceSheet);
+    if (!sheet) {
+      return { valid: false, error: 'Source sheet not found' };
+    }
+    
+    return { valid: true };
+  }
+  
+  function testConfiguration(mappings) {
+    // Test the configuration by reading sample data
+    try {
+      const ss = SpreadsheetApp.getActiveSpreadsheet();
+      const sheet = ss.getSheetByName(mappings.sourceSheet);
+      
+      if (!sheet || sheet.getLastRow() < 2) {
+        return { success: false, error: 'No data found in source sheet' };
+      }
+      
+      // Try to read a sample row
+      const sampleRow = 2;
+      const projectNumber = getCellValue(sheet, sampleRow, mappings.projectNumber);
+      const projectName = getCellValue(sheet, sampleRow, mappings.projectName);
+      
+      if (!projectNumber || !projectName) {
+        return { success: false, error: 'Could not read project data from specified columns' };
+      }
+      
+      return { 
+        success: true, 
+        sample: {
+          projectNumber: projectNumber,
+          projectName: projectName
+        }
+      };
+    } catch (error) {
+      return { success: false, error: error.toString() };
+    }
+  }

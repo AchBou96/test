@@ -1,0 +1,768 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <base target="_top">
+  <style>
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+    
+    body {
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+      background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      min-height: 100vh;
+      padding: 20px;
+    }
+    
+    .container {
+      background: white;
+      border-radius: 20px;
+      box-shadow: 0 20px 60px rgba(0, 0, 0, 0.1);
+      max-width: 500px;
+      width: 100%;
+      overflow: hidden;
+      transition: all 0.3s ease;
+    }
+    
+    .container.processing {
+      transform: scale(0.98);
+    }
+    
+    .header {
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      color: white;
+      padding: 30px;
+      text-align: center;
+    }
+    
+    .header h1 {
+      font-size: 24px;
+      margin-bottom: 10px;
+    }
+    
+    .header p {
+      opacity: 0.9;
+      font-size: 15px;
+    }
+    
+    .content {
+      padding: 40px 30px;
+      position: relative;
+    }
+    
+    /* Loading Overlay */
+    .loading-overlay {
+      position: absolute;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background: rgba(255, 255, 255, 0.95);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      z-index: 100;
+      opacity: 0;
+      visibility: hidden;
+      transition: all 0.3s ease;
+    }
+    
+    .loading-overlay.active {
+      opacity: 1;
+      visibility: visible;
+    }
+    
+    .loading-spinner {
+      width: 50px;
+      height: 50px;
+      border: 4px solid #f3f3f3;
+      border-top: 4px solid #667eea;
+      border-radius: 50%;
+      animation: spin 1s linear infinite;
+      margin-bottom: 20px;
+    }
+    
+    @keyframes spin {
+      0% { transform: rotate(0deg); }
+      100% { transform: rotate(360deg); }
+    }
+    
+    .loading-text {
+      color: #667eea;
+      font-size: 16px;
+      font-weight: 500;
+      text-align: center;
+    }
+    
+    .loading-subtext {
+      color: #999;
+      font-size: 14px;
+      margin-top: 5px;
+    }
+    
+    .currency-display {
+      background: #f8f9fa;
+      border-radius: 12px;
+      padding: 25px;
+      margin-bottom: 30px;
+      text-align: center;
+      animation: fadeIn 0.5s ease;
+    }
+    
+    @keyframes fadeIn {
+      from { opacity: 0; transform: translateY(10px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+    
+    .currency-icon {
+      font-size: 48px;
+      margin-bottom: 15px;
+    }
+    
+    .currency-name {
+      font-size: 28px;
+      font-weight: 600;
+      color: #333;
+      margin-bottom: 8px;
+    }
+    
+    .currency-code {
+      font-size: 18px;
+      color: #666;
+      background: white;
+      padding: 5px 15px;
+      border-radius: 20px;
+      display: inline-block;
+    }
+    
+    .conversion-section {
+      margin-bottom: 30px;
+    }
+    
+    .conversion-label {
+      font-size: 16px;
+      color: #333;
+      margin-bottom: 15px;
+      text-align: center;
+    }
+    
+    .rate-input-group {
+      display: flex;
+      align-items: center;
+      gap: 15px;
+      background: #f8f9fa;
+      padding: 20px;
+      border-radius: 12px;
+      border: 2px solid transparent;
+      transition: all 0.3s ease;
+    }
+    
+    .rate-input-group:focus-within {
+      border-color: #667eea;
+      box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+    }
+    
+    .currency-badge {
+      background: #667eea;
+      color: white;
+      padding: 10px 15px;
+      border-radius: 8px;
+      font-weight: 600;
+      font-size: 16px;
+      white-space: nowrap;
+    }
+    
+    .equals {
+      color: #999;
+      font-size: 20px;
+    }
+    
+    .rate-input {
+      flex: 1;
+      border: none;
+      background: none;
+      font-size: 24px;
+      font-weight: 600;
+      text-align: center;
+      color: #333;
+      outline: none;
+    }
+    
+    .rate-input::placeholder {
+      color: #ccc;
+    }
+    
+    .eur-badge {
+      background: #28a745;
+      color: white;
+      padding: 10px 15px;
+      border-radius: 8px;
+      font-weight: 600;
+      font-size: 16px;
+    }
+    
+    .suggestions {
+      margin-top: 20px;
+      opacity: 0;
+      animation: slideUp 0.5s ease 0.3s forwards;
+    }
+    
+    @keyframes slideUp {
+      from { opacity: 0; transform: translateY(20px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+    
+    .suggestions-title {
+      font-size: 14px;
+      color: #666;
+      margin-bottom: 10px;
+    }
+    
+    .suggestion-pills {
+      display: flex;
+      gap: 10px;
+      flex-wrap: wrap;
+    }
+    
+    .suggestion {
+      background: #e9ecef;
+      border: none;
+      padding: 8px 16px;
+      border-radius: 20px;
+      font-size: 14px;
+      cursor: pointer;
+      transition: all 0.2s ease;
+    }
+    
+    .suggestion:hover {
+      background: #dee2e6;
+      transform: translateY(-1px);
+    }
+    
+    .suggestion:active {
+      transform: translateY(0);
+    }
+    
+    .preview-section {
+      background: #e7f3ff;
+      border-radius: 12px;
+      padding: 20px;
+      margin-bottom: 30px;
+      opacity: 0;
+      max-height: 0;
+      overflow: hidden;
+      transition: all 0.3s ease;
+    }
+    
+    .preview-section.active {
+      opacity: 1;
+      max-height: 200px;
+    }
+    
+    .preview-title {
+      font-size: 14px;
+      color: #0066cc;
+      margin-bottom: 10px;
+      font-weight: 600;
+    }
+    
+    .preview-calculation {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 10px;
+      font-size: 18px;
+      color: #333;
+    }
+    
+    .button-group {
+      display: flex;
+      gap: 10px;
+    }
+    
+    .btn {
+      flex: 1;
+      padding: 14px 20px;
+      border: none;
+      border-radius: 10px;
+      font-size: 16px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.3s ease;
+      position: relative;
+      overflow: hidden;
+    }
+    
+    .btn-secondary {
+      background: #e9ecef;
+      color: #495057;
+    }
+    
+    .btn-secondary:hover {
+      background: #dee2e6;
+    }
+    
+    .btn-primary {
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      color: white;
+    }
+    
+    .btn-primary:hover:not(:disabled) {
+      transform: translateY(-2px);
+      box-shadow: 0 5px 15px rgba(102, 126, 234, 0.4);
+    }
+    
+    .btn:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+      transform: none !important;
+    }
+    
+    .btn-loading {
+      color: transparent;
+    }
+    
+    .btn-loading::after {
+      content: '';
+      position: absolute;
+      width: 20px;
+      height: 20px;
+      top: 50%;
+      left: 50%;
+      margin-left: -10px;
+      margin-top: -10px;
+      border: 2px solid #f3f3f3;
+      border-radius: 50%;
+      border-top-color: #667eea;
+      animation: spin 1s linear infinite;
+    }
+    
+    .auto-detect {
+      text-align: center;
+      margin-top: 15px;
+    }
+    
+    .auto-detect-btn {
+      color: #667eea;
+      background: none;
+      border: none;
+      font-size: 14px;
+      cursor: pointer;
+      text-decoration: underline;
+      transition: all 0.2s ease;
+    }
+    
+    .auto-detect-btn:hover {
+      color: #5a67d8;
+    }
+    
+    .auto-detect-btn:disabled {
+      color: #999;
+      cursor: not-allowed;
+    }
+    
+    .success-indicator {
+      position: fixed;
+      top: 20px;
+      right: 20px;
+      background: #28a745;
+      color: white;
+      padding: 12px 20px;
+      border-radius: 8px;
+      font-weight: 500;
+      opacity: 0;
+      transform: translateY(-20px);
+      transition: all 0.3s ease;
+      z-index: 1000;
+    }
+    
+    .success-indicator.show {
+      opacity: 1;
+      transform: translateY(0);
+    }
+    
+    .error-message {
+      background: #f8d7da;
+      color: #721c24;
+      padding: 12px 20px;
+      border-radius: 8px;
+      margin-bottom: 20px;
+      border: 1px solid #f5c6cb;
+      animation: shake 0.5s ease;
+    }
+    
+    @keyframes shake {
+      0%, 100% { transform: translateX(0); }
+      25% { transform: translateX(-5px); }
+      75% { transform: translateX(5px); }
+    }
+    
+    /* Currency-specific icons */
+    .currency-icon.usd::before { content: '$'; }
+    .currency-icon.gbp::before { content: '£'; }
+    .currency-icon.jpy::before { content: '¥'; }
+    .currency-icon.cad::before { content: 'C$'; }
+    .currency-icon.aud::before { content: 'A$'; }
+    .currency-icon.chf::before { content: 'Fr'; }
+    .currency-icon.cny::before { content: '¥'; }
+    .currency-icon.inr::before { content: '₹'; }
+    .currency-icon.default::before { content: '💱'; }
+  </style>
+</head>
+<body>
+  <div class="container" id="mainContainer">
+    <div class="header">
+      <h1>Currency Conversion Required</h1>
+      <p>Project currency differs from EUR base currency</p>
+    </div>
+    
+    <div class="content">
+      <!-- Loading overlay -->
+      <div class="loading-overlay" id="loadingOverlay">
+        <div class="loading-spinner"></div>
+        <div class="loading-text">Processing...</div>
+        <div class="loading-subtext" id="loadingSubtext">Loading currency data</div>
+      </div>
+      
+      <div id="currencyDisplay" class="currency-display">
+        <div class="currency-icon default" id="currencyIcon">💱</div>
+        <div class="currency-name" id="currencyName">Loading...</div>
+        <div class="currency-code" id="currencyCode">...</div>
+      </div>
+      
+      <div class="conversion-section">
+        <div class="conversion-label">Enter exchange rate to EUR</div>
+        
+        <div class="rate-input-group">
+          <div class="currency-badge">1 <span id="currencyLabel">USD</span></div>
+          <div class="equals">=</div>
+          <input type="number" 
+                 class="rate-input" 
+                 id="exchangeRate"
+                 placeholder="0.0000" 
+                 step="0.0001"
+                 onkeyup="updatePreview()"
+                 onchange="validateRate()">
+          <div class="eur-badge">EUR</div>
+        </div>
+        
+        <div class="suggestions">
+          <div class="suggestions-title">Quick rates (approximate):</div>
+          <div class="suggestion-pills" id="suggestionPills">
+            <!-- Will be populated dynamically -->
+          </div>
+        </div>
+        
+        <div class="auto-detect">
+          <button class="auto-detect-btn" id="fetchRateBtn" onclick="fetchCurrentRate()">
+            Fetch current rate from web
+          </button>
+        </div>
+      </div>
+      
+      <div class="preview-section" id="previewSection">
+        <div class="preview-title">Preview conversion</div>
+        <div class="preview-calculation">
+          <span>100 <span id="previewCurrency">USD</span></span>
+          <span>=</span>
+          <span id="previewResult">92 EUR</span>
+        </div>
+      </div>
+      
+      <div id="errorArea"></div>
+      
+      <div class="button-group">
+        <button class="btn btn-secondary" onclick="useDefaultRate()">Use 1:1 Rate</button>
+        <button class="btn btn-primary" onclick="applyConversion()" disabled id="applyBtn">
+          Apply Conversion
+        </button>
+      </div>
+    </div>
+  </div>
+  
+  <div class="success-indicator" id="successIndicator">
+    Exchange rate applied successfully!
+  </div>
+  
+  <script>
+    let projectCurrency = 'USD';
+    let currencyData = null;
+    let isProcessing = false;
+    
+    // Common exchange rates for quick suggestions
+    const commonRates = {
+      'USD': [0.92, 0.93, 0.94, 0.95],
+      'GBP': [1.15, 1.16, 1.17, 1.18],
+      'JPY': [0.0061, 0.0062, 0.0063, 0.0064],
+      'CAD': [0.68, 0.69, 0.70, 0.71],
+      'AUD': [0.60, 0.61, 0.62, 0.63],
+      'CHF': [1.02, 1.03, 1.04, 1.05],
+      'CNY': [0.13, 0.14, 0.15, 0.16],
+      'INR': [0.011, 0.012, 0.013, 0.014]
+    };
+    
+    // Currency display names
+    const currencyNames = {
+      'USD': 'US Dollar',
+      'GBP': 'British Pound',
+      'JPY': 'Japanese Yen',
+      'CAD': 'Canadian Dollar',
+      'AUD': 'Australian Dollar',
+      'CHF': 'Swiss Franc',
+      'CNY': 'Chinese Yuan',
+      'INR': 'Indian Rupee'
+    };
+    
+    // Initialize on load
+    window.onload = function() {
+      loadCurrencyData();
+    };
+    
+    function loadCurrencyData() {
+      showLoading('Loading currency data...');
+      
+      // Get currency data from backend
+      google.script.run
+        .withSuccessHandler(onCurrencyDataLoaded)
+        .withFailureHandler(onLoadError)
+        .getCurrencyDataForUI();
+    }
+    
+    function onCurrencyDataLoaded(data) {
+      hideLoading();
+      currencyData = data;
+      projectCurrency = data.currency || 'USD';
+      
+      // Update UI with currency info
+      updateCurrencyDisplay(projectCurrency);
+      
+      // Load suggestions
+      loadSuggestions(projectCurrency);
+      
+      // Focus on input
+      setTimeout(() => {
+        document.getElementById('exchangeRate').focus();
+      }, 300);
+    }
+    
+    function onLoadError(error) {
+      hideLoading();
+      showError('Failed to load currency data. Using default USD.');
+      
+      // Use defaults
+      projectCurrency = 'USD';
+      updateCurrencyDisplay(projectCurrency);
+      loadSuggestions(projectCurrency);
+    }
+    
+    function updateCurrencyDisplay(currency) {
+      const upper = currency.toUpperCase();
+      
+      // Update icon
+      const iconEl = document.getElementById('currencyIcon');
+      iconEl.className = `currency-icon ${upper.toLowerCase()}`;
+      
+      // Update name and code
+      document.getElementById('currencyName').textContent = currencyNames[upper] || currency;
+      document.getElementById('currencyCode').textContent = upper;
+      document.getElementById('currencyLabel').textContent = upper;
+      document.getElementById('previewCurrency').textContent = upper;
+      
+      // Animate in
+      const display = document.getElementById('currencyDisplay');
+      display.style.animation = 'none';
+      setTimeout(() => {
+        display.style.animation = 'fadeIn 0.5s ease';
+      }, 10);
+    }
+    
+    function loadSuggestions(currency) {
+      const rates = commonRates[currency.toUpperCase()] || [0.90, 0.95, 1.00, 1.05];
+      const pillsContainer = document.getElementById('suggestionPills');
+      
+      pillsContainer.innerHTML = rates.map(rate => 
+        `<button class="suggestion" onclick="setRate(${rate})">${rate}</button>`
+      ).join('');
+    }
+    
+    function setRate(rate) {
+      document.getElementById('exchangeRate').value = rate;
+      updatePreview();
+      validateRate();
+      
+      // Animate the selection
+      event.target.style.background = '#667eea';
+      event.target.style.color = 'white';
+      setTimeout(() => {
+        event.target.style.background = '';
+        event.target.style.color = '';
+      }, 200);
+    }
+    
+    function updatePreview() {
+      const rate = parseFloat(document.getElementById('exchangeRate').value);
+      const applyBtn = document.getElementById('applyBtn');
+      const previewSection = document.getElementById('previewSection');
+      
+      if (rate && rate > 0) {
+        applyBtn.disabled = false;
+        previewSection.classList.add('active');
+        document.getElementById('previewResult').textContent = 
+          (100 * rate).toFixed(2) + ' EUR';
+      } else {
+        applyBtn.disabled = true;
+        previewSection.classList.remove('active');
+      }
+    }
+    
+    function validateRate() {
+      const rate = parseFloat(document.getElementById('exchangeRate').value);
+      const input = document.getElementById('exchangeRate');
+      
+      if (rate && rate > 0) {
+        input.style.borderColor = '#28a745';
+        clearError();
+      } else if (input.value) {
+        input.style.borderColor = '#dc3545';
+        showError('Please enter a valid positive number');
+      } else {
+        input.style.borderColor = '';
+        clearError();
+      }
+    }
+    
+    function fetchCurrentRate() {
+      if (isProcessing) return;
+      
+      const btn = document.getElementById('fetchRateBtn');
+      btn.disabled = true;
+      btn.textContent = 'Fetching...';
+      
+      showLoading('Fetching current exchange rate...');
+      
+      // Simulate API call (replace with actual implementation)
+      setTimeout(() => {
+        hideLoading();
+        btn.disabled = false;
+        btn.textContent = 'Fetch current rate from web';
+        
+        // Set a simulated rate
+        const simulatedRate = 0.93 + (Math.random() * 0.04 - 0.02);
+        setRate(simulatedRate.toFixed(4));
+        
+        showSuccess(`Current rate fetched: 1 ${projectCurrency} = ${simulatedRate.toFixed(4)} EUR`);
+      }, 1500);
+    }
+    
+    function useDefaultRate() {
+      if (confirm('Use 1:1 conversion rate? This may affect accuracy.')) {
+        setRate(1);
+      }
+    }
+    
+    function applyConversion() {
+      if (isProcessing) return;
+      
+      const rate = parseFloat(document.getElementById('exchangeRate').value);
+      
+      if (!rate || rate <= 0) {
+        showError('Please enter a valid exchange rate');
+        return;
+      }
+      
+      isProcessing = true;
+      const btn = document.getElementById('applyBtn');
+      btn.disabled = true;
+      btn.classList.add('btn-loading');
+      btn.textContent = 'Applying...';
+      
+      showLoading('Applying exchange rate and analyzing project...');
+      
+      // Send to Google Apps Script
+      google.script.run
+        .withSuccessHandler(onConversionSuccess)
+        .withFailureHandler(onConversionError)
+        .applyExchangeRate(rate);
+    }
+    
+    function onConversionSuccess() {
+      hideLoading();
+      showSuccess('Exchange rate applied successfully!');
+      
+      // Close dialog after brief delay
+      setTimeout(() => {
+        google.script.host.close();
+      }, 1000);
+    }
+    
+    function onConversionError(error) {
+      isProcessing = false;
+      hideLoading();
+      
+      const btn = document.getElementById('applyBtn');
+      btn.disabled = false;
+      btn.classList.remove('btn-loading');
+      btn.textContent = 'Apply Conversion';
+      
+      showError('Failed to apply exchange rate: ' + (error.message || 'Unknown error'));
+    }
+    
+    function showLoading(message) {
+      const overlay = document.getElementById('loadingOverlay');
+      const subtext = document.getElementById('loadingSubtext');
+      const container = document.getElementById('mainContainer');
+      
+      subtext.textContent = message || 'Processing...';
+      overlay.classList.add('active');
+      container.classList.add('processing');
+    }
+    
+    function hideLoading() {
+      const overlay = document.getElementById('loadingOverlay');
+      const container = document.getElementById('mainContainer');
+      
+      overlay.classList.remove('active');
+      container.classList.remove('processing');
+    }
+    
+    function showError(message) {
+      const errorArea = document.getElementById('errorArea');
+      errorArea.innerHTML = `<div class="error-message">${message}</div>`;
+      
+      // Auto-clear after 5 seconds
+      setTimeout(clearError, 5000);
+    }
+    
+    function clearError() {
+      document.getElementById('errorArea').innerHTML = '';
+    }
+    
+    function showSuccess(message) {
+      const indicator = document.getElementById('successIndicator');
+      indicator.textContent = message;
+      indicator.classList.add('show');
+      
+      setTimeout(() => {
+        indicator.classList.remove('show');
+      }, 3000);
+    }
+    
+    // Keyboard shortcuts
+    document.addEventListener('keydown', function(e) {
+      if (e.key === 'Enter' && !document.getElementById('applyBtn').disabled && !isProcessing) {
+        applyConversion();
+      } else if (e.key === 'Escape') {
+        if (confirm('Cancel currency conversion?')) {
+          google.script.host.close();
+        }
+      }
+    });
+  </script>
+</body>
+</html>

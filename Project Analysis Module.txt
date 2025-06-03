@@ -1,0 +1,631 @@
+
+// ============================================
+// Google Apps Script - Project Analysis Module
+// ============================================
+
+function analyzeProject() {
+    const ss = SpreadsheetApp.getActiveSpreadsheet();
+    const ui = SpreadsheetApp.getUi();
+    
+    // Get configuration
+    const config = getConfig();
+    if (!config) {
+      ui.alert('Please setup Main Project Database first!');
+      return;
+    }
+    
+    // Get source worksheet
+    const sourceSheet = ss.getSheetByName(config.SourceSheet);
+    if (!sourceSheet) {
+      ui.alert('Source worksheet not found!');
+      return;
+    }
+    
+    // Check if there are projects
+    const lastRow = sourceSheet.getLastRow();
+    if (lastRow < 2) {
+      ui.alert('No projects found in the database!');
+      return;
+    }
+    
+    // Show project selection UI
+    const html = HtmlService.createHtmlOutputFromFile('ProjectSelectionUI')
+      .setWidth(600)
+      .setHeight(600);
+    
+    ui.showModalDialog(html, 'Select Project to Analyze');
+  }
+  
+  // Function called from UI to get projects for selection
+function getProjectsForSelection() {
+ // Optimized function to replace the slow getProjectsForSelection
+  const config = getConfig();
+  if (!config) {
+    throw new Error('Configuration not found');
+  }
+  
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const sourceSheet = ss.getSheetByName(config.SourceSheet);
+  
+  if (!sourceSheet) {
+    throw new Error('Source worksheet not found');
+  }
+  
+  const lastRow = sourceSheet.getLastRow();
+  const lastCol = sourceSheet.getLastColumn();
+  
+  // Early return if no data
+  if (lastRow < 2) {
+    return [];
+  }
+  
+  // Get cached column indices
+  const cols = getColumnIndices(config);
+  
+  // Validate columns are within range
+  const maxCol = Math.max(cols.projNum, cols.projName, cols.currency) + 1;
+  if (maxCol > lastCol) {
+    throw new Error('Configuration columns exceed sheet dimensions');
+  }
+  
+  // Batch read all data at once - this is the key optimization
+  const allData = sourceSheet.getRange(2, 1, lastRow - 1, lastCol).getValues();
+  
+  // Process data in a single pass
+  const projectMap = new Map();
+  
+  for (let i = 0; i < allData.length; i++) {
+    const row = allData[i];
+    const projNum = String(row[cols.projNum] || '').trim();
+    
+    if (projNum) {
+      if (projectMap.has(projNum)) {
+        // Just increment the count
+        projectMap.get(projNum).itemCount++;
+      } else {
+        // New project - add to map
+        projectMap.set(projNum, {
+          projectNumber: projNum,
+          projectName: String(row[cols.projName] || '').trim(),
+          currency: String(row[cols.currency] || '').trim(),
+          itemCount: 1,
+          firstRow: i + 2 // +2 because data starts at row 2
+        });
+      }
+    }
+  }
+  
+  // Convert map to array and return
+  return Array.from(projectMap.values());
+}
+let columnIndexCache = null;
+function getColumnIndices(config) {
+  if (columnIndexCache) return columnIndexCache;
+  
+  columnIndexCache = {
+    projNum: letterToColumn(config.ProjectNumber) - 1,
+    projName: letterToColumn(config.ProjectName) - 1,
+    currency: letterToColumn(config.Currency) - 1,
+    itemDesc: letterToColumn(config.ItemDescription) - 1,
+    eacCost: letterToColumn(config.EACCost) - 1,
+    budgetCost: letterToColumn(config.BudgetedCost) - 1
+  };
+  
+  return columnIndexCache;
+}
+
+
+// Test function to verify database connection
+function testDatabaseConnection() {
+  try {
+    const config = getConfig();
+    if (!config) {
+      return {
+        success: false,
+        message: 'No database configuration found. Please run "Setup Main Project Database" first.'
+      };
+    }
+    
+    const ss = SpreadsheetApp.getActiveSpreadsheet();
+    const sheet = ss.getSheetByName(config.SourceSheet);
+    
+    if (!sheet) {
+      return {
+        success: false,
+        message: `Configured source sheet "${config.SourceSheet}" not found.`
+      };
+    }
+    
+    const lastRow = sheet.getLastRow();
+    const projectCount = lastRow > 1 ? lastRow - 1 : 0;
+    
+    return {
+      success: true,
+      message: `Database connected successfully. Found ${projectCount} rows in "${config.SourceSheet}".`,
+      projectCount: projectCount
+    };
+  } catch (error) {
+    return {
+      success: false,
+      message: 'Database connection error: ' + error.toString()
+    };
+  }
+}
+
+// Function to check what's wrong
+function debugConfiguration() {
+  const config = getConfig();
+  console.log('Current configuration:', config);
+  
+  if (!config) {
+    console.log('No configuration found. User needs to run Setup Main Project Database.');
+    return 'No configuration';
+  }
+  
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const sheets = ss.getSheets().map(s => s.getName());
+  console.log('Available sheets:', sheets);
+  
+  if (!sheets.includes(config.SourceSheet)) {
+    console.log(`Configured sheet "${config.SourceSheet}" not found in spreadsheet`);
+    return 'Sheet not found';
+  }
+  
+  const sourceSheet = ss.getSheetByName(config.SourceSheet);
+  const lastRow = sourceSheet.getLastRow();
+  const lastCol = sourceSheet.getLastColumn();
+  
+  console.log(`Sheet dimensions: ${lastRow} rows x ${lastCol} columns`);
+  
+  // Check if mapped columns exist
+  const mappings = {
+    ProjectNumber: config.ProjectNumber,
+    ProjectName: config.ProjectName,
+    Currency: config.Currency,
+    EACCost: config.EACCost,
+    BudgetedCost: config.BudgetedCost,
+    ItemDescription: config.ItemDescription
+  };
+  
+  for (const [field, colLetter] of Object.entries(mappings)) {
+    const colNum = letterToColumn(colLetter);
+    if (colNum > lastCol) {
+      console.log(`ERROR: ${field} mapped to column ${colLetter} (${colNum}) but sheet only has ${lastCol} columns`);
+    }
+  }
+  
+  // Try to read first data row
+  if (lastRow >= 2) {
+    console.log('Sample data from row 2:');
+    for (const [field, colLetter] of Object.entries(mappings)) {
+      const value = getCellValue(sourceSheet, 2, colLetter);
+      console.log(`${field} (${colLetter}): ${value}`);
+    }
+  }
+  
+  return 'Debug complete';
+}
+  
+  // Function called from UI to process selected project
+  function processSelectedProject(selectedProject) {
+    const ui = SpreadsheetApp.getUi();
+    const currency = selectedProject.currency;
+    
+    // Store selected project in script properties for later use
+    PropertiesService.getScriptProperties().setProperty('CURRENT_PROJECT', JSON.stringify(selectedProject));
+    
+    // Check if currency conversion is needed
+    if (currency.toUpperCase() !== 'EUR') {
+      // Show currency conversion UI
+      const html = HtmlService.createHtmlOutputFromFile('CurrencyConversionUI')
+        .setWidth(500)
+        .setHeight(600);
+      
+      // Pass currency to the UI
+      html.append(`<script>const projectCurrency = '${currency}';</script>`);
+      
+      ui.showModalDialog(html, 'Currency Conversion Required');
+    } else {
+      // No conversion needed, proceed with analysis
+      performProjectAnalysis(selectedProject.projectNumber, 1);
+    }
+  }
+  
+  // Function called from currency conversion UI
+  function applyExchangeRate(rate) {
+    const selectedProject = JSON.parse(PropertiesService.getScriptProperties().getProperty('CURRENT_PROJECT'));
+    performProjectAnalysis(selectedProject.projectNumber, rate);
+  }
+  
+  function performProjectAnalysis(projectNumber, exchangeRate) {
+    const ss = SpreadsheetApp.getActiveSpreadsheet();
+    const config = getConfig();
+    const sourceSheet = ss.getSheetByName(config.SourceSheet);
+    const categories = getCategoryKeywords();
+    
+    // Initialize collections
+    const categorizedItemsEAC = {};
+    const categorizedItemsBudget = {};
+    const uncategorizedItems = [];
+    
+    let projectName = '';
+    let totalEACCost = 0;
+    let totalBudgetedCost = 0;
+    
+    const lastRow = sourceSheet.getLastRow();
+    
+    // Process project items
+    for (let i = 2; i <= lastRow; i++) {
+      if (getCellValue(sourceSheet, i, config.ProjectNumber).toString() === projectNumber) {
+        if (!projectName) {
+          projectName = getCellValue(sourceSheet, i, config.ProjectName).toString();
+        }
+        
+        // Get costs
+        const itemDesc = getCellValue(sourceSheet, i, config.ItemDescription).toString().toUpperCase();
+        const itemEACCost = parseFloat(getCellValue(sourceSheet, i, config.EACCost) || 0) * exchangeRate;
+        const itemBudgetCost = parseFloat(getCellValue(sourceSheet, i, config.BudgetedCost) || 0) * exchangeRate;
+        
+        // Add to totals
+        totalEACCost += itemEACCost;
+        totalBudgetedCost += itemBudgetCost;
+        
+        // Categorize item
+        let categorized = false;
+        
+        for (const mainCat in categories) {
+          for (const subcat in categories[mainCat]) {
+            const keywords = categories[mainCat][subcat];
+            for (const keyword of keywords) {
+              if (itemDesc.includes(keyword)) {
+                const catKey = `${mainCat}|${subcat}`;
+                
+                // Store costs
+                if (!categorizedItemsEAC[catKey]) categorizedItemsEAC[catKey] = 0;
+                categorizedItemsEAC[catKey] += itemEACCost;
+                
+                if (!categorizedItemsBudget[catKey]) categorizedItemsBudget[catKey] = 0;
+                categorizedItemsBudget[catKey] += itemBudgetCost;
+                
+                categorized = true;
+                break;
+              }
+            }
+            if (categorized) break;
+          }
+          if (categorized) break;
+        }
+        
+        if (!categorized && itemEACCost > 0) {
+          uncategorizedItems.push({
+            description: getCellValue(sourceSheet, i, config.ItemDescription),
+            eacCost: itemEACCost,
+            budgetCost: itemBudgetCost,
+            row: i
+          });
+        }
+      }
+    }
+    
+    // Store analysis data for manual categorization
+    PropertiesService.getScriptProperties().setProperty('ANALYSIS_DATA', JSON.stringify({
+      projectName: projectName,
+      projectNumber: projectNumber,
+      totalEACCost: totalEACCost,
+      totalBudgetedCost: totalBudgetedCost,
+      categorizedItemsEAC: categorizedItemsEAC,
+      categorizedItemsBudget: categorizedItemsBudget,
+      uncategorizedItems: uncategorizedItems
+    }));
+    
+    // Handle uncategorized items
+    if (uncategorizedItems.length > 0) {
+      showManualCategorizationUI(uncategorizedItems);
+    } else {
+      // No uncategorized items, create summary directly
+      createSummarySheet(projectName, projectNumber, totalEACCost, totalBudgetedCost,
+                        categorizedItemsEAC, categorizedItemsBudget);
+    }
+  }
+  
+  function showManualCategorizationUI(uncategorizedItems) {
+    const ui = SpreadsheetApp.getUi();
+    
+    // Prepare items data for UI
+    const itemsForUI = uncategorizedItems.map((item, index) => ({
+      index: index,
+      description: item.description,
+      eacCost: formatNumber(item.eacCost, '#,##0'),
+      budgetCost: formatNumber(item.budgetCost, '#,##0'),
+      currency: 'EUR'
+    }));
+    
+    // Show manual categorization UI
+    const template = HtmlService.createTemplateFromFile('ManualCategorizationUI');
+    template.items = itemsForUI;
+    template.categories = getCategoryKeywords();
+    
+    const html = template.evaluate()
+      .setWidth(900)
+      .setHeight(700);
+    
+    ui.showModalDialog(html, 'Manual Item Categorization');
+  }
+  
+  // Function called from manual categorization UI
+  function processCategorization(categorizedData) {
+  try {
+    // Retrieve stored analysis data
+    const storedData = PropertiesService.getScriptProperties().getProperty('ANALYSIS_DATA');
+    
+    if (!storedData) {
+      throw new Error('Analysis data not found. Please restart the analysis process.');
+    }
+    
+    const analysisData = JSON.parse(storedData);
+    
+    // Validate analysis data structure
+    if (!analysisData || !analysisData.uncategorizedItems || !Array.isArray(analysisData.uncategorizedItems)) {
+      throw new Error('Invalid analysis data structure. Please restart the analysis process.');
+    }
+    
+    // Initialize categorized items if they don't exist
+    if (!analysisData.categorizedItemsEAC) {
+      analysisData.categorizedItemsEAC = {};
+    }
+    if (!analysisData.categorizedItemsBudget) {
+      analysisData.categorizedItemsBudget = {};
+    }
+    
+    // Apply categorizations
+    let categorizedCount = 0;
+    
+    for (const [indexStr, category] of Object.entries(categorizedData)) {
+      const index = parseInt(indexStr);
+      
+      // Validate index
+      if (isNaN(index) || index < 0 || index >= analysisData.uncategorizedItems.length) {
+        console.error(`Invalid index: ${indexStr}`);
+        continue;
+      }
+      
+      const item = analysisData.uncategorizedItems[index];
+      
+      if (item && category) {
+        // Add to categorized totals
+        if (!analysisData.categorizedItemsEAC[category]) {
+          analysisData.categorizedItemsEAC[category] = 0;
+        }
+        analysisData.categorizedItemsEAC[category] += item.eacCost || 0;
+        
+        if (!analysisData.categorizedItemsBudget[category]) {
+          analysisData.categorizedItemsBudget[category] = 0;
+        }
+        analysisData.categorizedItemsBudget[category] += item.budgetCost || 0;
+        
+        categorizedCount++;
+      }
+    }
+    
+    console.log(`Categorized ${categorizedCount} items`);
+    
+    // Create summary sheet
+    createSummarySheet(
+      analysisData.projectName,
+      analysisData.projectNumber,
+      analysisData.totalEACCost,
+      analysisData.totalBudgetedCost,
+      analysisData.categorizedItemsEAC,
+      analysisData.categorizedItemsBudget
+    );
+    
+    // Clean up stored data
+    PropertiesService.getScriptProperties().deleteProperty('ANALYSIS_DATA');
+    PropertiesService.getScriptProperties().deleteProperty('CURRENT_PROJECT');
+    
+    return { success: true };
+    
+  } catch (error) {
+    console.error('Error in processCategorization:', error);
+    throw new Error('Failed to process categorization: ' + error.toString());
+  }
+}  
+  // Function to get uncategorized items for UI
+  function getUncategorizedItemsForUI() {
+    const analysisData = JSON.parse(PropertiesService.getScriptProperties().getProperty('ANALYSIS_DATA'));
+    return analysisData.uncategorizedItems.map((item, index) => ({
+      index: index,
+      description: item.description,
+      eacCost: formatNumber(item.eacCost, '#,##0'),
+      budgetCost: formatNumber(item.budgetCost, '#,##0')
+    }));
+  }
+  
+  // Function to get categories for UI
+  function getCategoriesForUI() {
+    const categories = getCategoryKeywords();
+    const categoriesForUI = [];
+    
+    for (const mainCat in categories) {
+      const subcategories = [];
+      for (const subcat in categories[mainCat]) {
+        subcategories.push({
+          name: subcat,
+          key: `${mainCat}|${subcat}`
+        });
+      }
+      categoriesForUI.push({
+        name: mainCat,
+        subcategories: subcategories
+      });
+    }
+    
+    return categoriesForUI;
+  }
+  
+  function createSummarySheet(projectName, projectNumber, totalEACCost, totalBudgetedCost,
+                             categorizedItemsEAC, categorizedItemsBudget) {
+    const ss = SpreadsheetApp.getActiveSpreadsheet();
+    
+    // Create sheet name (max 31 chars, reserve 8 for " Summary")
+    let sheetName = projectName;
+    if (sheetName.length > 23) {
+      sheetName = sheetName.substring(0, 23);
+    }
+    sheetName += ' Summary';
+    
+    // Create or clear sheet
+    const summarySheet = createOrClearSheet(sheetName);
+    
+    // Header
+    summarySheet.getRange('A1:H1').merge();
+    summarySheet.getRange('A1').setValue('PROJECT FINANCIAL SUMMARY');
+    summarySheet.getRange('A1').setFontSize(16).setFontWeight('bold').setHorizontalAlignment('center');
+    
+    // Project Info
+    summarySheet.getRange('A3').setValue('Project Name:');
+    summarySheet.getRange('C3').setValue(projectName);
+    summarySheet.getRange('A4').setValue('Project Number:');
+    summarySheet.getRange('C4').setValue(projectNumber);
+    summarySheet.getRange('A5').setValue('Analysis Date:');
+    summarySheet.getRange('C5').setValue(new Date().toLocaleDateString());
+    
+    // Cost Summary Table
+    let currentRow = 8;
+    summarySheet.getRange(`A${currentRow}`).setValue('COST BREAKDOWN (kEUR)').setFontWeight('bold');
+    
+    currentRow += 2;
+    summarySheet.getRange(`A${currentRow}:E${currentRow}`).setValues([
+      ['Main Category', 'Subcategory', 'EAC Cost (kEUR)', '% of Total', 'Variance']
+    ]);
+    summarySheet.getRange(`A${currentRow}:E${currentRow}`)
+      .setFontWeight('bold')
+      .setBackground('#C8C8C8');
+    
+    // Calculate totals by main category
+    const mainCatTotalsEAC = {};
+    const mainCatTotalsBudget = {};
+    
+    for (const catKey in categorizedItemsEAC) {
+      const [mainCat] = catKey.split('|');
+      if (!mainCatTotalsEAC[mainCat]) mainCatTotalsEAC[mainCat] = 0;
+      mainCatTotalsEAC[mainCat] += categorizedItemsEAC[catKey];
+      
+      if (!mainCatTotalsBudget[mainCat]) mainCatTotalsBudget[mainCat] = 0;
+      if (categorizedItemsBudget[catKey]) {
+        mainCatTotalsBudget[mainCat] += categorizedItemsBudget[catKey];
+      }
+    }
+    
+    // Display by main category
+    for (const mainCat of ['LABOR', 'EQUIPMENTS']) {
+      if (mainCatTotalsEAC[mainCat] || mainCatTotalsBudget[mainCat]) {
+        currentRow++;
+        
+        const eacTotal = mainCatTotalsEAC[mainCat] || 0;
+        const budgetTotal = mainCatTotalsBudget[mainCat] || 0;
+        const variance = budgetTotal - eacTotal;
+        
+        summarySheet.getRange(`A${currentRow}`).setValue(mainCat).setFontWeight('bold');
+        summarySheet.getRange(`C${currentRow}`).setValue(eacTotal / 1000).setNumberFormat('#,##0.0');
+        summarySheet.getRange(`D${currentRow}`).setValue(totalEACCost > 0 ? eacTotal / totalEACCost : 0)
+          .setNumberFormat('0.0%');
+        summarySheet.getRange(`E${currentRow}`).setValue(variance / 1000).setNumberFormat('#,##0.0');
+        
+        if (variance < 0) {
+          summarySheet.getRange(`E${currentRow}`).setFontColor('#FF0000');
+        } else {
+          summarySheet.getRange(`E${currentRow}`).setFontColor('#008000');
+        }
+        
+        // Display subcategories
+        for (const catKey in categorizedItemsEAC) {
+          const [cat, subcat] = catKey.split('|');
+          if (cat === mainCat) {
+            currentRow++;
+            
+            const subcatBudget = categorizedItemsBudget[catKey] || 0;
+            const subcatVariance = subcatBudget - categorizedItemsEAC[catKey];
+            
+            summarySheet.getRange(`B${currentRow}`).setValue(`  ${subcat}`);
+            summarySheet.getRange(`C${currentRow}`).setValue(categorizedItemsEAC[catKey] / 1000)
+              .setNumberFormat('#,##0.0');
+            summarySheet.getRange(`D${currentRow}`)
+              .setValue(totalEACCost > 0 ? categorizedItemsEAC[catKey] / totalEACCost : 0)
+              .setNumberFormat('0.0%');
+            summarySheet.getRange(`E${currentRow}`).setValue(subcatVariance / 1000)
+              .setNumberFormat('#,##0.0');
+            
+            if (subcatVariance < 0) {
+              summarySheet.getRange(`E${currentRow}`).setFontColor('#FF0000');
+            } else {
+              summarySheet.getRange(`E${currentRow}`).setFontColor('#008000');
+            }
+          }
+        }
+      }
+    }
+    
+    // Total row
+    currentRow += 2;
+    summarySheet.getRange(`A${currentRow}`).setValue('TOTAL').setFontWeight('bold');
+    summarySheet.getRange(`C${currentRow}`).setValue(totalEACCost / 1000)
+      .setNumberFormat('#,##0.0').setFontWeight('bold');
+    summarySheet.getRange(`D${currentRow}`).setValue(1).setNumberFormat('0.0%');
+    summarySheet.getRange(`E${currentRow}`).setValue((totalBudgetedCost - totalEACCost) / 1000)
+      .setNumberFormat('#,##0.0').setFontWeight('bold');
+    
+    if ((totalBudgetedCost - totalEACCost) < 0) {
+      summarySheet.getRange(`E${currentRow}`).setFontColor('#FF0000');
+    } else {
+      summarySheet.getRange(`E${currentRow}`).setFontColor('#008000');
+    }
+    
+    // Budget Bridge
+    currentRow += 4;
+    summarySheet.getRange(`A${currentRow}`).setValue('BUDGET BRIDGE').setFontWeight('bold');
+    
+    currentRow += 2;
+    const bridgeData = [
+      ['EAC Cost (kEUR):', '', totalEACCost / 1000],
+      ['Budgeted Cost (kEUR):', '', totalBudgetedCost / 1000],
+      ['Variance (kEUR):', '', (totalEACCost - totalBudgetedCost) / 1000],
+      ['Variance %:', '', totalBudgetedCost !== 0 ? (totalEACCost - totalBudgetedCost) / totalBudgetedCost : 0]
+    ];
+    
+    for (const row of bridgeData) {
+      summarySheet.getRange(`A${currentRow}`).setValue(row[0]);
+      summarySheet.getRange(`C${currentRow}`).setValue(row[2]);
+      
+      if (row[0].includes('Variance (kEUR)')) {
+        summarySheet.getRange(`C${currentRow}`).setNumberFormat('#,##0.0');
+        if (row[2] > 0) {
+          summarySheet.getRange(`C${currentRow}`).setFontColor('#FF0000');
+        } else {
+          summarySheet.getRange(`C${currentRow}`).setFontColor('#008000');
+        }
+      } else if (row[0].includes('Variance %')) {
+        summarySheet.getRange(`C${currentRow}`).setNumberFormat('0.0%');
+      } else {
+        summarySheet.getRange(`C${currentRow}`).setNumberFormat('#,##0.0');
+      }
+      
+      currentRow++;
+    }
+    
+    // Auto-resize columns
+    summarySheet.autoResizeColumns(1, 5);
+    
+    // Create charts
+    createCharts(summarySheet, mainCatTotalsEAC, mainCatTotalsBudget, categorizedItemsEAC,
+                categorizedItemsBudget, totalEACCost, totalBudgetedCost);
+    
+    // Make sheet active
+    ss.setActiveSheet(summarySheet);
+    
+    // Clean up properties
+    PropertiesService.getScriptProperties().deleteProperty('CURRENT_PROJECT');
+    PropertiesService.getScriptProperties().deleteProperty('ANALYSIS_DATA');
+    
+    SpreadsheetApp.getUi().alert('Analysis complete! Summary sheet created.');
+  }

@@ -1,0 +1,815 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <base target="_top">
+  <style>
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+    
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background: #f8f9fa;
+      padding: 20px;
+    }
+    
+    .chart-container {
+      background: white;
+      border-radius: 12px;
+      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+      padding: 30px;
+      max-width: 1200px;
+      margin: 0 auto;
+    }
+    
+    .loading-overlay {
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background: rgba(255, 255, 255, 0.95);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      z-index: 1000;
+    }
+    
+    .loading-overlay.hidden {
+      display: none;
+    }
+    
+    .loading-content {
+      text-align: center;
+    }
+    
+    .loading-spinner {
+      width: 50px;
+      height: 50px;
+      border: 4px solid #f3f3f3;
+      border-top: 4px solid #1a73e8;
+      border-radius: 50%;
+      animation: spin 1s linear infinite;
+      margin: 0 auto 20px;
+    }
+    
+    @keyframes spin {
+      0% { transform: rotate(0deg); }
+      100% { transform: rotate(360deg); }
+    }
+    
+    .chart-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 30px;
+    }
+    
+    .chart-title {
+      font-size: 24px;
+      font-weight: 600;
+      color: #1a73e8;
+    }
+    
+    .chart-subtitle {
+      font-size: 14px;
+      color: #5f6368;
+      margin-top: 5px;
+    }
+    
+    .project-info {
+      font-size: 13px;
+      color: #5f6368;
+      margin-top: 8px;
+    }
+    
+    .chart-controls {
+      display: flex;
+      gap: 10px;
+    }
+    
+    .control-btn {
+      padding: 8px 16px;
+      border: 1px solid #dadce0;
+      border-radius: 8px;
+      background: white;
+      cursor: pointer;
+      font-size: 14px;
+      transition: all 0.3s ease;
+    }
+    
+    .control-btn:hover {
+      background: #f8f9fa;
+      border-color: #1a73e8;
+    }
+    
+    .control-btn.active {
+      background: #1a73e8;
+      color: white;
+      border-color: #1a73e8;
+    }
+    
+    #waterfallChart {
+      width: 100%;
+      height: 500px;
+      position: relative;
+      margin-top: 20px;
+    }
+    
+    .bar-group {
+      position: absolute;
+      bottom: 0;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      transition: all 0.3s ease;
+    }
+    
+    .bar {
+      width: 40px;
+      position: relative;
+      cursor: pointer;
+      transition: all 0.3s ease;
+    }
+    
+    .bar:hover {
+      opacity: 0.8;
+      transform: scale(1.05);
+    }
+    
+    .bar-positive {
+      background: linear-gradient(180deg, #34a853 0%, #2d8e47 100%);
+      border: 1px solid #2d8e47;
+    }
+    
+    .bar-negative {
+      background: linear-gradient(180deg, #ea4335 0%, #c72c1f 100%);
+      border: 1px solid #c72c1f;
+    }
+    
+    .bar-start {
+      background: linear-gradient(180deg, #4285f4 0%, #3367d6 100%);
+      border: 1px solid #3367d6;
+    }
+    
+    .bar-end {
+      background: linear-gradient(180deg, #fbbc04 0%, #f9ab00 100%);
+      border: 1px solid #f9ab00;
+    }
+    
+    .bar-label {
+      position: absolute;
+      top: -25px;
+      font-size: 12px;
+      font-weight: 600;
+      white-space: nowrap;
+      text-align: center;
+      width: 100%;
+    }
+    
+    .bar-value {
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      color: white;
+      font-weight: 600;
+      font-size: 11px;
+    }
+    
+    .connector-line {
+      position: absolute;
+      height: 2px;
+      background: #5f6368;
+      opacity: 0.5;
+      z-index: 1;
+    }
+    
+    .x-axis-label {
+      position: absolute;
+      bottom: -40px;
+      font-size: 11px;
+      color: #5f6368;
+      text-align: center;
+      width: 100%;
+      transform: rotate(-45deg);
+      transform-origin: center top;
+    }
+    
+    .y-axis {
+      position: absolute;
+      left: -60px;
+      top: 0;
+      height: 100%;
+      width: 50px;
+    }
+    
+    .y-axis-label {
+      position: absolute;
+      right: 10px;
+      font-size: 11px;
+      color: #5f6368;
+    }
+    
+    .grid-line {
+      position: absolute;
+      width: 100%;
+      height: 1px;
+      background: #e8eaed;
+      left: 0;
+    }
+    
+    .summary-panel {
+      margin-top: 40px;
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+      gap: 20px;
+    }
+    
+    .summary-card {
+      background: #f8f9fa;
+      border-radius: 8px;
+      padding: 20px;
+      border-left: 4px solid #1a73e8;
+    }
+    
+    .summary-title {
+      font-size: 14px;
+      color: #5f6368;
+      margin-bottom: 8px;
+    }
+    
+    .summary-value {
+      font-size: 24px;
+      font-weight: 600;
+      color: #202124;
+    }
+    
+    .summary-change {
+      font-size: 14px;
+      margin-top: 5px;
+    }
+    
+    .positive {
+      color: #34a853;
+    }
+    
+    .negative {
+      color: #ea4335;
+    }
+    
+    .tooltip {
+      position: absolute;
+      background: rgba(0, 0, 0, 0.9);
+      color: white;
+      padding: 12px;
+      border-radius: 8px;
+      font-size: 13px;
+      pointer-events: none;
+      opacity: 0;
+      transition: opacity 0.3s ease;
+      z-index: 1000;
+      max-width: 250px;
+    }
+    
+    .tooltip.active {
+      opacity: 1;
+    }
+    
+    .tooltip-title {
+      font-weight: 600;
+      margin-bottom: 5px;
+    }
+    
+    .tooltip-row {
+      display: flex;
+      justify-content: space-between;
+      margin: 3px 0;
+    }
+    
+    .legend {
+      display: flex;
+      justify-content: center;
+      gap: 20px;
+      margin-top: 20px;
+      font-size: 13px;
+    }
+    
+    .legend-item {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    
+    .legend-color {
+      width: 16px;
+      height: 16px;
+      border-radius: 4px;
+    }
+    
+    .error-state {
+      text-align: center;
+      padding: 60px 20px;
+      color: #5f6368;
+    }
+    
+    .error-icon {
+      font-size: 48px;
+      margin-bottom: 20px;
+      color: #ea4335;
+    }
+    
+    .error-message {
+      font-size: 16px;
+      margin-bottom: 10px;
+      color: #202124;
+    }
+    
+    .error-detail {
+      font-size: 14px;
+      color: #5f6368;
+    }
+    
+    .no-data-message {
+      text-align: center;
+      padding: 40px;
+      color: #5f6368;
+      font-style: italic;
+    }
+    
+    .export-btn {
+      padding: 8px 16px;
+      border: 1px solid #dadce0;
+      border-radius: 8px;
+      background: white;
+      cursor: pointer;
+      font-size: 14px;
+      transition: all 0.3s ease;
+      margin-left: 10px;
+    }
+    
+    .export-btn:hover {
+      background: #f8f9fa;
+      border-color: #1a73e8;
+    }
+    
+    @media (max-width: 768px) {
+      .chart-container {
+        padding: 20px;
+      }
+      
+      #waterfallChart {
+        height: 400px;
+      }
+      
+      .bar {
+        width: 30px;
+      }
+      
+      .x-axis-label {
+        font-size: 10px;
+      }
+      
+      .chart-header {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 15px;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="loading-overlay" id="loadingOverlay">
+    <div class="loading-content">
+      <div class="loading-spinner"></div>
+      <p style="color: #5f6368;">Loading financial data...</p>
+    </div>
+  </div>
+  
+  <div class="chart-container">
+    <div class="chart-header">
+      <div>
+        <h1 class="chart-title">Budget to EAC Bridge Analysis</h1>
+        <p class="chart-subtitle">Visual breakdown of cost variances by category</p>
+        <p class="project-info" id="projectInfo">Loading project information...</p>
+      </div>
+      <div class="chart-controls">
+        <button class="control-btn active" onclick="toggleView('category')">By Category</button>
+        <button class="control-btn" onclick="toggleView('subcategory')">By Subcategory</button>
+        <button class="control-btn" onclick="toggleView('top10')">Top 10 Impact</button>
+        <button class="export-btn" onclick="exportChart()">📊 Export</button>
+      </div>
+    </div>
+    
+    <div id="waterfallChart">
+      <!-- Chart will be rendered here -->
+    </div>
+    
+    <div class="legend">
+      <div class="legend-item">
+        <div class="legend-color bar-start"></div>
+        <span>Budget</span>
+      </div>
+      <div class="legend-item">
+        <div class="legend-color bar-positive"></div>
+        <span>Favorable Variance</span>
+      </div>
+      <div class="legend-item">
+        <div class="legend-color bar-negative"></div>
+        <span>Unfavorable Variance</span>
+      </div>
+      <div class="legend-item">
+        <div class="legend-color bar-end"></div>
+        <span>EAC</span>
+      </div>
+    </div>
+    
+    <div class="summary-panel">
+      <div class="summary-card">
+        <div class="summary-title">Total Budget</div>
+        <div class="summary-value" id="totalBudget">Loading...</div>
+      </div>
+      <div class="summary-card">
+        <div class="summary-title">Total EAC</div>
+        <div class="summary-value" id="totalEAC">Loading...</div>
+      </div>
+      <div class="summary-card">
+        <div class="summary-title">Overall Variance</div>
+        <div class="summary-value" id="totalVariance">Loading...</div>
+        <div class="summary-change" id="variancePercent">-</div>
+      </div>
+      <div class="summary-card" style="border-left-color: #ea4335;">
+        <div class="summary-title">Biggest Impact</div>
+        <div class="summary-value" id="biggestImpact">-</div>
+        <div class="summary-change" id="biggestImpactValue">-</div>
+      </div>
+    </div>
+  </div>
+  
+  <div class="tooltip" id="tooltip"></div>
+  
+  <script>
+    let chartData = null;
+    let currentView = 'category';
+    const chartContainer = document.getElementById('waterfallChart');
+    const tooltip = document.getElementById('tooltip');
+    
+    // Load data on startup
+    window.onload = function() {
+      loadChartData();
+    };
+    
+    function loadChartData() {
+      google.script.run
+        .withSuccessHandler(onDataLoaded)
+        .withFailureHandler(onDataLoadError)
+        .getFormattedWaterfallData();
+    }
+    
+    function onDataLoaded(data) {
+      if (!data) {
+        showError('No data received', 'Please ensure you have analyzed a project first.');
+        return;
+      }
+      
+      chartData = data;
+      
+      // Hide loading overlay
+      document.getElementById('loadingOverlay').classList.add('hidden');
+      
+      // Update project info
+      if (data.projectInfo) {
+        document.getElementById('projectInfo').textContent = 
+          `${data.projectInfo.name} (${data.projectInfo.number})`;
+      } else {
+        document.getElementById('projectInfo').textContent = 'Project Analysis';
+      }
+      
+      // Initialize chart
+      initializeChart(data);
+    }
+    
+    function onDataLoadError(error) {
+      console.error('Error loading data:', error);
+      document.getElementById('loadingOverlay').classList.add('hidden');
+      showError('Failed to load data', error.message || 'Please try again or check your project analysis.');
+    }
+    
+    function showError(title, message) {
+      chartContainer.innerHTML = `
+        <div class="error-state">
+          <div class="error-icon">⚠️</div>
+          <div class="error-message">${title}</div>
+          <div class="error-detail">${message}</div>
+        </div>
+      `;
+      
+      // Hide summary panel
+      document.querySelector('.summary-panel').style.display = 'none';
+      document.querySelector('.legend').style.display = 'none';
+    }
+    
+    function initializeChart(data) {
+      // Validate data
+      if (!data.budget || !data.eac || !data.categories) {
+        showError('Invalid data format', 'The financial data is incomplete or invalid.');
+        return;
+      }
+      
+      // Update summary panel with real data
+      document.getElementById('totalBudget').textContent = `€${data.budget.toFixed(0)}K`;
+      document.getElementById('totalEAC').textContent = `€${data.eac.toFixed(0)}K`;
+      
+      const variance = data.eac - data.budget;
+      const variancePercent = data.budget > 0 ? (variance / data.budget * 100).toFixed(1) : 0;
+      
+      document.getElementById('totalVariance').textContent = `€${variance.toFixed(0)}K`;
+      document.getElementById('variancePercent').textContent = `${variance > 0 ? '+' : ''}${variancePercent}%`;
+      document.getElementById('variancePercent').className = 
+        `summary-change ${variance > 0 ? 'negative' : 'positive'}`;
+      
+      // Update biggest impact if provided
+      if (data.biggestImpact) {
+        document.getElementById('biggestImpact').textContent = data.biggestImpact.name;
+        document.getElementById('biggestImpactValue').textContent = 
+          `€${Math.abs(data.biggestImpact.variance).toFixed(0)}K`;
+        document.getElementById('biggestImpactValue').className = 
+          `summary-change ${data.biggestImpact.variance > 0 ? 'negative' : 'positive'}`;
+      }
+      
+      // Draw chart
+      drawWaterfallChart(data);
+    }
+    
+    function drawWaterfallChart(data) {
+      chartContainer.innerHTML = '';
+      
+      if (!data.categories || data.categories.length === 0) {
+        chartContainer.innerHTML = '<div class="no-data-message">No category data available for visualization</div>';
+        return;
+      }
+      
+      let items = [];
+      let cumulative = data.budget;
+      
+      // Add starting point
+      items.push({
+        name: 'Budget',
+        value: data.budget,
+        type: 'start',
+        position: 0,
+        cumulative: cumulative
+      });
+      
+      // Process categories or subcategories based on view
+      if (currentView === 'category') {
+        data.categories.forEach(cat => {
+          if (!cat.name || typeof cat.variance === 'undefined') return;
+          
+          items.push({
+            name: cat.name,
+            value: Math.abs(cat.variance),
+            variance: cat.variance,
+            type: cat.variance > 0 ? 'negative' : 'positive',
+            position: cumulative,
+            cumulative: cumulative + cat.variance,
+            percentage: cat.variancePercent || 0,
+            budget: cat.budget,
+            eac: cat.eac
+          });
+          cumulative += cat.variance;
+        });
+      } else if (currentView === 'subcategory') {
+        data.categories.forEach(cat => {
+          if (!cat.subcategories) return;
+          
+          cat.subcategories.forEach(sub => {
+            const variance = sub.eac - sub.budget;
+            const percentage = sub.budget > 0 ? (variance / sub.budget * 100).toFixed(1) : 0;
+            
+            items.push({
+              name: sub.name,
+              value: Math.abs(variance),
+              variance: variance,
+              type: variance > 0 ? 'negative' : 'positive',
+              position: cumulative,
+              cumulative: cumulative + variance,
+              percentage: percentage,
+              category: cat.name,
+              budget: sub.budget,
+              eac: sub.eac
+            });
+            cumulative += variance;
+          });
+        });
+      } else if (currentView === 'top10') {
+        // Get all variances and sort by impact
+        let allItems = [];
+        data.categories.forEach(cat => {
+          if (!cat.subcategories) return;
+          
+          cat.subcategories.forEach(sub => {
+            const variance = sub.eac - sub.budget;
+            allItems.push({
+              name: `${cat.name} - ${sub.name}`,
+              variance: variance,
+              budget: sub.budget,
+              eac: sub.eac,
+              category: cat.name
+            });
+          });
+        });
+        
+        // Sort by absolute variance and take top 10
+        allItems.sort((a, b) => Math.abs(b.variance) - Math.abs(a.variance));
+        allItems.slice(0, 10).forEach(item => {
+          const percentage = item.budget > 0 ? (item.variance / item.budget * 100).toFixed(1) : 0;
+          
+          items.push({
+            name: item.name,
+            value: Math.abs(item.variance),
+            variance: item.variance,
+            type: item.variance > 0 ? 'negative' : 'positive',
+            position: cumulative,
+            cumulative: cumulative + item.variance,
+            percentage: percentage,
+            budget: item.budget,
+            eac: item.eac
+          });
+          cumulative += item.variance;
+        });
+      }
+      
+      // Add ending point
+      items.push({
+        name: 'EAC',
+        value: data.eac,
+        type: 'end',
+        position: 0,
+        cumulative: data.eac
+      });
+      
+      // Calculate scale
+      const maxValue = Math.max(...items.map(i => i.cumulative || i.value));
+      const chartHeight = 400;
+      const chartWidth = chartContainer.offsetWidth - 100;
+      const barWidth = Math.min(60, chartWidth / (items.length + 1));
+      const scale = chartHeight / maxValue;
+      
+      // Add grid lines
+      for (let i = 0; i <= 5; i++) {
+        const value = (maxValue / 5) * i;
+        const y = chartHeight - (value * scale);
+        
+        const gridLine = document.createElement('div');
+        gridLine.className = 'grid-line';
+        gridLine.style.top = `${y}px`;
+        chartContainer.appendChild(gridLine);
+        
+        const label = document.createElement('div');
+        label.className = 'y-axis-label';
+        label.style.top = `${y - 8}px`;
+        label.textContent = `€${(value / 1000).toFixed(0)}K`;
+        chartContainer.appendChild(label);
+      }
+      
+      // Draw bars and connectors
+      items.forEach((item, index) => {
+        const barGroup = document.createElement('div');
+        barGroup.className = 'bar-group';
+        barGroup.style.left = `${60 + index * (barWidth + 20)}px`;
+        barGroup.style.width = `${barWidth}px`;
+        
+        const bar = document.createElement('div');
+        bar.className = `bar bar-${item.type}`;
+        
+        if (item.type === 'start' || item.type === 'end') {
+          bar.style.height = `${item.value * scale}px`;
+          bar.style.bottom = '0';
+        } else {
+          bar.style.height = `${item.value * scale}px`;
+          bar.style.bottom = `${item.position * scale}px`;
+        }
+        
+        // Add value label
+        if (item.value > 50) { // Only show if bar is large enough
+          const valueLabel = document.createElement('div');
+          valueLabel.className = 'bar-value';
+          valueLabel.textContent = item.value.toFixed(0);
+          bar.appendChild(valueLabel);
+        }
+        
+        // Add hover effect
+        bar.addEventListener('mouseenter', (e) => showTooltip(e, item));
+        bar.addEventListener('mouseleave', hideTooltip);
+        
+        barGroup.appendChild(bar);
+        
+        // Add x-axis label
+        const xLabel = document.createElement('div');
+        xLabel.className = 'x-axis-label';
+        xLabel.textContent = item.name;
+        barGroup.appendChild(xLabel);
+        
+        // Add connector line to next bar
+        if (index < items.length - 1 && item.type !== 'end') {
+          const nextItem = items[index + 1];
+          const connector = document.createElement('div');
+          connector.className = 'connector-line';
+          connector.style.width = `${barWidth + 20}px`;
+          connector.style.left = `${barWidth / 2}px`;
+          connector.style.top = `${chartHeight - (item.cumulative * scale)}px`;
+          barGroup.appendChild(connector);
+        }
+        
+        chartContainer.appendChild(barGroup);
+      });
+    }
+    
+    function toggleView(view) {
+      currentView = view;
+      document.querySelectorAll('.control-btn').forEach(btn => {
+        btn.classList.remove('active');
+      });
+      event.target.classList.add('active');
+      
+      if (chartData) {
+        drawWaterfallChart(chartData);
+      }
+    }
+    
+    function showTooltip(event, item) {
+      const rect = event.target.getBoundingClientRect();
+      
+      let content = `<div class="tooltip-title">${item.name}</div>`;
+      
+      if (item.type === 'start' || item.type === 'end') {
+        content += `<div class="tooltip-row">
+          <span>Total:</span>
+          <span>€${item.value.toFixed(0)}K</span>
+        </div>`;
+      } else {
+        content += `<div class="tooltip-row">
+          <span>Budget:</span>
+          <span>€${(item.budget || 0).toFixed(0)}K</span>
+        </div>`;
+        content += `<div class="tooltip-row">
+          <span>EAC:</span>
+          <span>€${(item.eac || 0).toFixed(0)}K</span>
+        </div>`;
+        content += `<div class="tooltip-row">
+          <span>Variance:</span>
+          <span class="${item.variance > 0 ? 'negative' : 'positive'}">
+            ${item.variance > 0 ? '+' : ''}€${item.variance.toFixed(0)}K
+          </span>
+        </div>`;
+        content += `<div class="tooltip-row">
+          <span>% Change:</span>
+          <span>${item.percentage}%</span>
+        </div>`;
+        if (item.category) {
+          content += `<div class="tooltip-row">
+            <span>Category:</span>
+            <span>${item.category}</span>
+          </div>`;
+        }
+      }
+      
+      tooltip.innerHTML = content;
+      tooltip.style.left = `${rect.left + rect.width / 2 - 100}px`;
+      tooltip.style.top = `${rect.top - 10}px`;
+      tooltip.classList.add('active');
+    }
+    
+    function hideTooltip() {
+      tooltip.classList.remove('active');
+    }
+    
+    function exportChart() {
+      if (!chartData) {
+        alert('No data to export');
+        return;
+      }
+      
+      // Send data to Google Apps Script for export
+      google.script.run
+        .withSuccessHandler(() => {
+          alert('Chart data exported successfully!');
+        })
+        .withFailureHandler((error) => {
+          alert('Export failed: ' + error.message);
+        })
+        .exportWaterfallData(chartData, currentView);
+    }
+    
+    // Handle resize
+    window.addEventListener('resize', () => {
+      if (chartData) {
+        drawWaterfallChart(chartData);
+      }
+    });
+  </script>
+</body>
+</html>

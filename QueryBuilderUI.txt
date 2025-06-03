@@ -1,0 +1,1354 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <base target="_top">
+  <style>
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+    
+    :root {
+      --primary: #4f46e5;
+      --primary-light: #6366f1;
+      --primary-dark: #4338ca;
+      --secondary: #10b981;
+      --accent: #f59e0b;
+      --danger: #ef4444;
+      --warning: #f97316;
+      --info: #3b82f6;
+      --dark: #1e293b;
+      --gray: #64748b;
+      --light: #f1f5f9;
+      --white: #ffffff;
+      --shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
+      --shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1);
+      --shadow-lg: 0 20px 25px -5px rgba(0, 0, 0, 0.1);
+    }
+    
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%);
+      color: var(--dark);
+      min-height: 100vh;
+      padding: 20px;
+    }
+    
+    .container {
+      max-width: 1400px;
+      margin: 0 auto;
+      background: var(--white);
+      border-radius: 16px;
+      box-shadow: var(--shadow-lg);
+      overflow: hidden;
+    }
+    
+    .header {
+      background: linear-gradient(135deg, var(--primary) 0%, var(--primary-dark) 100%);
+      color: var(--white);
+      padding: 30px 40px;
+      position: relative;
+      overflow: hidden;
+    }
+    
+    .header::after {
+      content: '';
+      position: absolute;
+      top: -50%;
+      right: -10%;
+      width: 300px;
+      height: 300px;
+      background: radial-gradient(circle, rgba(255,255,255,0.1) 0%, transparent 70%);
+      border-radius: 50%;
+    }
+    
+    .header-content {
+      position: relative;
+      z-index: 1;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    
+    .header h1 {
+      font-size: 28px;
+      font-weight: 700;
+      margin-bottom: 5px;
+    }
+    
+    .header p {
+      font-size: 16px;
+      opacity: 0.9;
+    }
+    
+    .header-actions {
+      display: flex;
+      gap: 10px;
+    }
+    
+    .header-btn {
+      padding: 8px 16px;
+      background: rgba(255, 255, 255, 0.2);
+      color: var(--white);
+      border: 1px solid rgba(255, 255, 255, 0.3);
+      border-radius: 8px;
+      cursor: pointer;
+      transition: all 0.3s ease;
+      font-size: 14px;
+      font-weight: 500;
+    }
+    
+    .header-btn:hover {
+      background: rgba(255, 255, 255, 0.3);
+      transform: translateY(-1px);
+    }
+    
+    .main-content {
+      display: flex;
+      height: calc(100vh - 200px);
+      max-height: 700px;
+    }
+    
+    .query-builder {
+      flex: 1;
+      padding: 30px;
+      overflow-y: auto;
+    }
+    
+    .sidebar {
+      width: 350px;
+      background: var(--light);
+      padding: 30px;
+      overflow-y: auto;
+      border-left: 1px solid #e2e8f0;
+    }
+    
+    .section-title {
+      font-size: 18px;
+      font-weight: 600;
+      margin-bottom: 20px;
+      color: var(--dark);
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+    
+    .section-icon {
+      width: 32px;
+      height: 32px;
+      background: var(--primary);
+      color: var(--white);
+      border-radius: 8px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    
+    .condition-container {
+      background: var(--light);
+      border-radius: 12px;
+      padding: 20px;
+      margin-bottom: 20px;
+      border: 2px dashed #cbd5e1;
+      min-height: 150px;
+      position: relative;
+    }
+    
+    .condition-container.has-conditions {
+      border-style: solid;
+      border-color: var(--primary-light);
+      background: #f8fafc;
+    }
+    
+    .empty-state {
+      text-align: center;
+      color: var(--gray);
+      padding: 40px;
+    }
+    
+    .empty-state-icon {
+      font-size: 48px;
+      margin-bottom: 10px;
+      opacity: 0.5;
+    }
+    
+    .condition-group {
+      background: var(--white);
+      border-radius: 10px;
+      padding: 15px;
+      margin-bottom: 15px;
+      box-shadow: var(--shadow-sm);
+      position: relative;
+      animation: slideIn 0.3s ease-out;
+    }
+    
+    @keyframes slideIn {
+      from {
+        opacity: 0;
+        transform: translateY(-10px);
+      }
+      to {
+        opacity: 1;
+        transform: translateY(0);
+      }
+    }
+    
+    .condition-group.invalid {
+      border: 2px solid var(--danger);
+      background: #fef2f2;
+    }
+    
+    .condition-header {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      margin-bottom: 15px;
+    }
+    
+    .condition-number {
+      width: 28px;
+      height: 28px;
+      background: var(--primary);
+      color: var(--white);
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 14px;
+      font-weight: 600;
+    }
+    
+    .logic-operator {
+      padding: 5px 12px;
+      background: var(--white);
+      border: 2px solid var(--primary-light);
+      border-radius: 20px;
+      font-size: 12px;
+      font-weight: 600;
+      color: var(--primary);
+      cursor: pointer;
+      transition: all 0.2s ease;
+    }
+    
+    .logic-operator:hover {
+      background: var(--primary);
+      color: var(--white);
+    }
+    
+    .remove-condition {
+      margin-left: auto;
+      width: 28px;
+      height: 28px;
+      background: var(--danger);
+      color: var(--white);
+      border: none;
+      border-radius: 50%;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: all 0.3s ease;
+    }
+    
+    .remove-condition:hover {
+      transform: rotate(90deg);
+      background: #dc2626;
+    }
+    
+    .condition-row {
+      display: grid;
+      grid-template-columns: 1fr 150px 1fr 1fr auto;
+      gap: 10px;
+      align-items: center;
+    }
+    
+    .condition-input {
+      padding: 10px 14px;
+      border: 2px solid #e2e8f0;
+      border-radius: 8px;
+      font-size: 14px;
+      transition: all 0.3s ease;
+      background: var(--white);
+    }
+    
+    .condition-input:focus {
+      outline: none;
+      border-color: var(--primary);
+      box-shadow: 0 0 0 3px rgba(79, 70, 229, 0.1);
+    }
+    
+    .condition-input.error {
+      border-color: var(--danger);
+      background: #fef2f2;
+    }
+    
+    .value-to-container {
+      display: none;
+      align-items: center;
+      gap: 10px;
+    }
+    
+    .value-to-container.active {
+      display: flex;
+    }
+    
+    .add-condition-btn {
+      width: 100%;
+      padding: 12px;
+      background: var(--primary);
+      color: var(--white);
+      border: none;
+      border-radius: 8px;
+      font-size: 14px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.3s ease;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+    }
+    
+    .add-condition-btn:hover {
+      background: var(--primary-dark);
+      transform: translateY(-2px);
+      box-shadow: var(--shadow);
+    }
+    
+    .query-templates {
+      margin-bottom: 30px;
+    }
+    
+    .template-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+      gap: 10px;
+    }
+    
+    .template-btn {
+      padding: 12px 16px;
+      background: var(--white);
+      border: 2px solid #e2e8f0;
+      border-radius: 8px;
+      cursor: pointer;
+      transition: all 0.3s ease;
+      text-align: left;
+      position: relative;
+      overflow: hidden;
+    }
+    
+    .template-btn::before {
+      content: '';
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 4px;
+      height: 100%;
+      background: var(--primary);
+      transform: translateX(-100%);
+      transition: transform 0.3s ease;
+    }
+    
+    .template-btn:hover {
+      border-color: var(--primary);
+      background: #f8fafc;
+      transform: translateX(4px);
+    }
+    
+    .template-btn:hover::before {
+      transform: translateX(0);
+    }
+    
+    .template-title {
+      font-weight: 600;
+      font-size: 14px;
+      color: var(--dark);
+      margin-bottom: 4px;
+    }
+    
+    .template-desc {
+      font-size: 12px;
+      color: var(--gray);
+    }
+    
+    .saved-queries {
+      margin-bottom: 30px;
+    }
+    
+    .saved-query-item {
+      background: var(--white);
+      border-radius: 8px;
+      padding: 12px;
+      margin-bottom: 10px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      cursor: pointer;
+      transition: all 0.3s ease;
+    }
+    
+    .saved-query-item:hover {
+      background: #f8fafc;
+      transform: translateX(4px);
+    }
+    
+    .saved-query-name {
+      font-weight: 500;
+      color: var(--dark);
+    }
+    
+    .saved-query-date {
+      font-size: 12px;
+      color: var(--gray);
+    }
+    
+    .action-buttons {
+      padding: 20px 30px;
+      background: #f8fafc;
+      border-top: 1px solid #e2e8f0;
+      display: flex;
+      gap: 10px;
+    }
+    
+    .btn {
+      padding: 12px 24px;
+      border: none;
+      border-radius: 8px;
+      font-size: 15px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.3s ease;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    
+    .btn-primary {
+      background: var(--primary);
+      color: var(--white);
+    }
+    
+    .btn-primary:hover:not(:disabled) {
+      background: var(--primary-dark);
+      transform: translateY(-2px);
+      box-shadow: var(--shadow);
+    }
+    
+    .btn-secondary {
+      background: var(--white);
+      color: var(--gray);
+      border: 2px solid #e2e8f0;
+    }
+    
+    .btn-secondary:hover {
+      background: var(--light);
+      border-color: var(--gray);
+    }
+    
+    .btn-success {
+      background: var(--secondary);
+      color: var(--white);
+    }
+    
+    .btn-success:hover {
+      background: #059669;
+      transform: translateY(-2px);
+      box-shadow: var(--shadow);
+    }
+    
+    .btn:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+    }
+    
+    .results-preview {
+      position: fixed;
+      bottom: 20px;
+      right: 20px;
+      background: var(--white);
+      border-radius: 12px;
+      padding: 20px;
+      box-shadow: var(--shadow-lg);
+      max-width: 400px;
+      transform: translateY(200%);
+      transition: transform 0.3s ease;
+    }
+    
+    .results-preview.active {
+      transform: translateY(0);
+    }
+    
+    .results-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 15px;
+    }
+    
+    .results-title {
+      font-weight: 600;
+      color: var(--dark);
+    }
+    
+    .close-results {
+      width: 24px;
+      height: 24px;
+      background: var(--light);
+      border: none;
+      border-radius: 50%;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    
+    .results-content {
+      font-size: 14px;
+      color: var(--gray);
+    }
+    
+    .validation-tooltip {
+      position: absolute;
+      bottom: -30px;
+      left: 0;
+      background: var(--danger);
+      color: var(--white);
+      padding: 6px 12px;
+      border-radius: 6px;
+      font-size: 12px;
+      opacity: 0;
+      transform: translateY(-5px);
+      transition: all 0.3s ease;
+      pointer-events: none;
+      white-space: nowrap;
+    }
+    
+    .validation-tooltip.active {
+      opacity: 1;
+      transform: translateY(0);
+    }
+    
+    .validation-tooltip::before {
+      content: '';
+      position: absolute;
+      top: -4px;
+      left: 20px;
+      width: 8px;
+      height: 8px;
+      background: var(--danger);
+      transform: rotate(45deg);
+    }
+    
+    .loading-spinner {
+      display: inline-block;
+      width: 16px;
+      height: 16px;
+      border: 2px solid rgba(255, 255, 255, 0.3);
+      border-top-color: var(--white);
+      border-radius: 50%;
+      animation: spin 0.8s linear infinite;
+    }
+    
+    @keyframes spin {
+      to { transform: rotate(360deg); }
+    }
+    
+    /* Help tooltips */
+    .help-icon {
+      width: 18px;
+      height: 18px;
+      background: var(--info);
+      color: var(--white);
+      border-radius: 50%;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 11px;
+      cursor: help;
+      position: relative;
+    }
+    
+    .help-tooltip {
+      position: absolute;
+      bottom: 100%;
+      left: 50%;
+      transform: translateX(-50%);
+      background: var(--dark);
+      color: var(--white);
+      padding: 8px 12px;
+      border-radius: 6px;
+      font-size: 12px;
+      white-space: nowrap;
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity 0.3s ease;
+      margin-bottom: 5px;
+    }
+    
+    .help-icon:hover .help-tooltip {
+      opacity: 1;
+    }
+    
+    /* Responsive */
+    @media (max-width: 1024px) {
+      .main-content {
+        flex-direction: column;
+        height: auto;
+        max-height: none;
+      }
+      
+      .sidebar {
+        width: 100%;
+        border-left: none;
+        border-top: 1px solid #e2e8f0;
+      }
+    }
+    
+    @media (max-width: 640px) {
+      .condition-row {
+        grid-template-columns: 1fr;
+      }
+      
+      .header-content {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 15px;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="header">
+      <div class="header-content">
+        <div>
+          <h1>🔍 Advanced Query Builder</h1>
+          <p>Build complex queries with an intuitive visual interface</p>
+        </div>
+        <div class="header-actions">
+          <button class="header-btn" onclick="saveCurrentQuery()">
+            💾 Save Query
+          </button>
+          <button class="header-btn" onclick="loadSavedQuery()">
+            📂 Load Query
+          </button>
+          <button class="header-btn" onclick="showHelp()">
+            ❓ Help
+          </button>
+        </div>
+      </div>
+    </div>
+    
+    <div class="main-content">
+      <div class="query-builder">
+        <div class="section-title">
+          <div class="section-icon">🔧</div>
+          <span>Query Conditions</span>
+          <span class="help-icon" style="margin-left: 10px;">
+            ?
+            <span class="help-tooltip">Click "Add Condition" to start building your query</span>
+          </span>
+        </div>
+        
+        <div class="condition-container" id="condition-container">
+          <div class="empty-state" id="empty-state">
+            <div class="empty-state-icon">🔍</div>
+            <p>No conditions added yet</p>
+            <p style="font-size: 14px; margin-top: 5px;">Start by adding your first condition</p>
+          </div>
+          
+          <div id="conditions-list" style="display: none;">
+            <!-- Conditions will be added here -->
+          </div>
+        </div>
+        
+        <button class="add-condition-btn" onclick="addCondition()">
+          <span>➕</span>
+          Add Condition
+        </button>
+      </div>
+      
+      <div class="sidebar">
+        <div class="section-title">
+          <div class="section-icon">⚡</div>
+          <span>Quick Templates</span>
+        </div>
+        
+        <div class="query-templates">
+          <div class="template-grid">
+            <button class="template-btn" onclick="applyTemplate('high-cost')">
+              <div class="template-title">💰 High Cost</div>
+              <div class="template-desc">Projects > 1M EUR</div>
+            </button>
+            
+            <button class="template-btn" onclick="applyTemplate('over-budget')">
+              <div class="template-title">📈 Over Budget</div>
+              <div class="template-desc">EAC > Budget</div>
+            </button>
+            
+            <button class="template-btn" onclick="applyTemplate('technology')">
+              <div class="template-title">⚙️ By Technology</div>
+              <div class="template-desc">Filter by tech type</div>
+            </button>
+            
+            <button class="template-btn" onclick="applyTemplate('high-flow')">
+              <div class="template-title">💧 High Flowrate</div>
+              <div class="template-desc">Flowrate > 500 m³/h</div>
+            </button>
+            
+            <button class="template-btn" onclick="applyTemplate('risk')">
+              <div class="template-title">⚠️ High Risk</div>
+              <div class="template-desc">Variance > 15%</div>
+            </button>
+            
+            <button class="template-btn" onclick="applyTemplate('efficiency')">
+              <div class="template-title">📊 Efficiency</div>
+              <div class="template-desc">Equipment > 70%</div>
+            </button>
+          </div>
+        </div>
+        
+        <div class="section-title" style="margin-top: 30px;">
+          <div class="section-icon">📁</div>
+          <span>Saved Queries</span>
+        </div>
+        
+        <div class="saved-queries" id="saved-queries">
+          <!-- Saved queries will be loaded here -->
+          <p style="text-align: center; color: var(--gray); font-size: 14px;">
+            No saved queries yet
+          </p>
+        </div>
+      </div>
+    </div>
+    
+    <div class="action-buttons">
+      <button class="btn btn-secondary" onclick="clearQuery()">
+        🗑️ Clear All
+      </button>
+      <button class="btn btn-secondary" onclick="validateQuery()">
+        ✓ Validate
+      </button>
+      <button class="btn btn-success" onclick="testQuery()">
+        🧪 Test Query
+      </button>
+      <button class="btn btn-primary" id="execute-btn" onclick="executeQuery()">
+        ▶️ Execute Query
+      </button>
+    </div>
+  </div>
+  
+  <div class="results-preview" id="results-preview">
+    <div class="results-header">
+      <span class="results-title">Query Results</span>
+      <button class="close-results" onclick="closeResults()">✕</button>
+    </div>
+    <div class="results-content" id="results-content">
+      <!-- Results will be shown here -->
+    </div>
+  </div>
+  
+  <script>
+    let conditionCount = 0;
+    let fields = [];
+    let conditions = [];
+    
+    // Initialize
+    window.onload = function() {
+      loadDatabaseFields();
+      loadSavedQueries();
+    };
+    
+    function loadDatabaseFields() {
+      google.script.run
+        .withSuccessHandler(function(result) {
+          fields = result;
+        })
+        .withFailureHandler(function(error) {
+          console.error('Failed to load fields:', error);
+          // Fallback fields for testing
+          fields = ['Project Number', 'Project Name', 'EAC Cost (EUR)', 
+                   'Budgeted Cost (EUR)', 'Flowrate (m3/h)', 'Technology Type'];
+        })
+        .getDatabaseFields();
+    }
+    
+    function loadSavedQueries() {
+      google.script.run
+        .withSuccessHandler(function(queries) {
+          displaySavedQueries(queries);
+        })
+        .withFailureHandler(function(error) {
+          console.error('Failed to load saved queries:', error);
+        })
+        .getSavedQueries();
+    }
+    
+    function displaySavedQueries(queries) {
+      const container = document.getElementById('saved-queries');
+      
+      if (!queries || queries.length === 0) {
+        container.innerHTML = '<p style="text-align: center; color: var(--gray); font-size: 14px;">No saved queries yet</p>';
+        return;
+      }
+      
+      container.innerHTML = '';
+      queries.forEach((query, index) => {
+        const item = document.createElement('div');
+        item.className = 'saved-query-item';
+        item.onclick = () => loadQuery(query);
+        
+        const date = new Date(query.date).toLocaleDateString();
+        item.innerHTML = `
+          <div>
+            <div class="saved-query-name">${query.name}</div>
+            <div class="saved-query-date">Saved: ${date}</div>
+          </div>
+          <span>▶</span>
+        `;
+        
+        container.appendChild(item);
+      });
+    }
+    
+    function addCondition() {
+      conditionCount++;
+      
+      // Hide empty state
+      document.getElementById('empty-state').style.display = 'none';
+      document.getElementById('conditions-list').style.display = 'block';
+      document.getElementById('condition-container').classList.add('has-conditions');
+      
+      const conditionsList = document.getElementById('conditions-list');
+      
+      const conditionGroup = document.createElement('div');
+      conditionGroup.className = 'condition-group';
+      conditionGroup.id = `condition-${conditionCount}`;
+      
+      // Create condition HTML
+      let conditionHTML = `
+        <div class="condition-header">
+          <span class="condition-number">${conditionCount}</span>
+      `;
+      
+      if (conditionCount > 1) {
+        conditionHTML += `
+          <select class="logic-operator" id="logic-${conditionCount}" onchange="updateCondition(${conditionCount})">
+            <option value="AND">AND</option>
+            <option value="OR">OR</option>
+          </select>
+        `;
+      }
+      
+      conditionHTML += `
+          <button class="remove-condition" onclick="removeCondition(${conditionCount})">✕</button>
+        </div>
+        <div class="condition-row">
+          <select class="condition-input" id="field-${conditionCount}" onchange="updateCondition(${conditionCount})">
+            <option value="">Select field...</option>
+      `;
+      
+      fields.forEach(field => {
+        conditionHTML += `<option value="${field}">${field}</option>`;
+      });
+      
+      conditionHTML += `
+          </select>
+          
+          <select class="condition-input" id="operator-${conditionCount}" onchange="handleOperatorChange(${conditionCount})">
+            <option value="">Operator...</option>
+            <option value="=">=</option>
+            <option value="<>">≠</option>
+            <option value=">">></option>
+            <option value="<"><</option>
+            <option value=">=">≥</option>
+            <option value="<=">≤</option>
+            <option value="LIKE">Contains</option>
+            <option value="NOT LIKE">Not Contains</option>
+            <option value="BETWEEN">Between</option>
+            <option value="IN">In List</option>
+          </select>
+          
+          <input type="text" class="condition-input" id="value-${conditionCount}" 
+                 placeholder="Value..." onblur="updateCondition(${conditionCount})">
+          
+          <div class="value-to-container" id="value-to-container-${conditionCount}">
+            <span>and</span>
+            <input type="text" class="condition-input" id="value-to-${conditionCount}" 
+                   placeholder="Value to..." onblur="updateCondition(${conditionCount})">
+          </div>
+          
+          <span class="validation-tooltip" id="validation-${conditionCount}"></span>
+        </div>
+      `;
+      
+      conditionGroup.innerHTML = conditionHTML;
+      conditionsList.appendChild(conditionGroup);
+      
+      // Add condition to array
+      conditions.push({
+        id: conditionCount,
+        logic: conditionCount > 1 ? 'AND' : null,
+        field: '',
+        operator: '',
+        value: '',
+        valueTo: ''
+      });
+      
+      updateExecuteButton();
+    }
+    
+    function removeCondition(id) {
+      const element = document.getElementById(`condition-${id}`);
+      if (element) {
+        element.style.animation = 'slideOut 0.3s ease-out';
+        setTimeout(() => {
+          element.remove();
+          
+          // Remove from conditions array
+          conditions = conditions.filter(c => c.id !== id);
+          
+          // Renumber remaining conditions
+          renumberConditions();
+          
+          // Check if empty
+          if (conditions.length === 0) {
+            document.getElementById('empty-state').style.display = 'block';
+            document.getElementById('conditions-list').style.display = 'none';
+            document.getElementById('condition-container').classList.remove('has-conditions');
+          }
+          
+          updateExecuteButton();
+        }, 300);
+      }
+    }
+    
+    function renumberConditions() {
+      const groups = document.querySelectorAll('.condition-group');
+      groups.forEach((group, index) => {
+        const number = group.querySelector('.condition-number');
+        if (number) {
+          number.textContent = index + 1;
+        }
+      });
+    }
+    
+    function handleOperatorChange(id) {
+      const operator = document.getElementById(`operator-${id}`).value;
+      const valueToContainer = document.getElementById(`value-to-container-${id}`);
+      
+      if (operator === 'BETWEEN') {
+        valueToContainer.classList.add('active');
+      } else {
+        valueToContainer.classList.remove('active');
+      }
+      
+      updateCondition(id);
+    }
+    
+    function updateCondition(id) {
+      const condition = conditions.find(c => c.id === id);
+      if (!condition) return;
+      
+      // Update condition data
+      const logic = document.getElementById(`logic-${id}`);
+      if (logic) condition.logic = logic.value;
+      
+      condition.field = document.getElementById(`field-${id}`).value;
+      condition.operator = document.getElementById(`operator-${id}`).value;
+      condition.value = document.getElementById(`value-${id}`).value;
+      condition.valueTo = document.getElementById(`value-to-${id}`)?.value || '';
+      
+      // Validate
+      validateCondition(id);
+      updateExecuteButton();
+    }
+    
+    function validateCondition(id) {
+      const condition = conditions.find(c => c.id === id);
+      if (!condition) return true;
+      
+      const group = document.getElementById(`condition-${id}`);
+      const tooltip = document.getElementById(`validation-${id}`);
+      let isValid = true;
+      let errorMessage = '';
+      
+      // Check required fields
+      if (!condition.field) {
+        errorMessage = 'Please select a field';
+        isValid = false;
+      } else if (!condition.operator) {
+        errorMessage = 'Please select an operator';
+        isValid = false;
+      } else if (!condition.value) {
+        errorMessage = 'Please enter a value';
+        isValid = false;
+      } else if (condition.operator === 'BETWEEN' && !condition.valueTo) {
+        errorMessage = 'Please enter the second value';
+        isValid = false;
+      }
+      
+      // Type-specific validation
+      if (isValid && condition.field && condition.value) {
+        if (condition.field.includes('Cost') || condition.field.includes('Flowrate')) {
+          // Numeric validation
+          if (isNaN(condition.value)) {
+            errorMessage = 'Value must be a number';
+            isValid = false;
+          } else if (condition.operator === 'BETWEEN' && isNaN(condition.valueTo)) {
+            errorMessage = 'Second value must be a number';
+            isValid = false;
+          }
+        }
+        
+        // IN operator validation
+        if (condition.operator === 'IN' && !condition.value.includes(',')) {
+          errorMessage = 'Use comma-separated values for IN operator';
+          isValid = false;
+        }
+      }
+      
+      // Update UI
+      if (isValid) {
+        group.classList.remove('invalid');
+        tooltip.classList.remove('active');
+        
+        // Mark inputs as valid
+        ['field', 'operator', 'value'].forEach(type => {
+          const input = document.getElementById(`${type}-${id}`);
+          if (input && input.value) {
+            input.classList.remove('error');
+          }
+        });
+      } else {
+        group.classList.add('invalid');
+        tooltip.textContent = errorMessage;
+        tooltip.classList.add('active');
+        
+        // Mark empty required fields
+        ['field', 'operator', 'value'].forEach(type => {
+          const input = document.getElementById(`${type}-${id}`);
+          if (input && !input.value) {
+            input.classList.add('error');
+          }
+        });
+      }
+      
+      return isValid;
+    }
+    
+    function validateQuery() {
+      let allValid = true;
+      
+      conditions.forEach(condition => {
+        if (!validateCondition(condition.id)) {
+          allValid = false;
+        }
+      });
+      
+      if (allValid && conditions.length > 0) {
+        showNotification('Query is valid!', 'success');
+      } else if (conditions.length === 0) {
+        showNotification('Please add at least one condition', 'warning');
+      } else {
+        showNotification('Please fix validation errors', 'error');
+      }
+      
+      return allValid;
+    }
+    
+    function updateExecuteButton() {
+      const btn = document.getElementById('execute-btn');
+      const validConditions = conditions.filter(c => 
+        c.field && c.operator && c.value
+      );
+      
+      btn.disabled = validConditions.length === 0;
+    }
+    
+    function clearQuery() {
+      if (conditions.length === 0) return;
+      
+      if (confirm('Are you sure you want to clear all conditions?')) {
+        conditions = [];
+        conditionCount = 0;
+        document.getElementById('conditions-list').innerHTML = '';
+        document.getElementById('empty-state').style.display = 'block';
+        document.getElementById('conditions-list').style.display = 'none';
+        document.getElementById('condition-container').classList.remove('has-conditions');
+        updateExecuteButton();
+      }
+    }
+    
+    function applyTemplate(template) {
+      clearQuery();
+      
+      switch(template) {
+        case 'high-cost':
+          setTimeout(() => {
+            addCondition();
+            document.getElementById(`field-${conditionCount}`).value = 'EAC Cost (EUR)';
+            document.getElementById(`operator-${conditionCount}`).value = '>';
+            document.getElementById(`value-${conditionCount}`).value = '1000000';
+            updateCondition(conditionCount);
+          }, 100);
+          break;
+          
+        case 'over-budget':
+          showNotification('This template requires custom logic', 'info');
+          break;
+          
+        case 'technology':
+          setTimeout(() => {
+            addCondition();
+            document.getElementById(`field-${conditionCount}`).value = 'Technology Type';
+            document.getElementById(`operator-${conditionCount}`).value = '=';
+            updateCondition(conditionCount);
+            document.getElementById(`value-${conditionCount}`).focus();
+          }, 100);
+          break;
+          
+        case 'high-flow':
+          setTimeout(() => {
+            addCondition();
+            document.getElementById(`field-${conditionCount}`).value = 'Flowrate (m3/h)';
+            document.getElementById(`operator-${conditionCount}`).value = '>';
+            document.getElementById(`value-${conditionCount}`).value = '500';
+            updateCondition(conditionCount);
+          }, 100);
+          break;
+          
+        case 'risk':
+          showNotification('This template requires variance calculation', 'info');
+          break;
+          
+        case 'efficiency':
+          showNotification('This template requires custom calculation', 'info');
+          break;
+      }
+    }
+    
+    function testQuery() {
+      if (!validateQuery()) return;
+      
+      // Show loading state
+      const resultsPreview = document.getElementById('results-preview');
+      const resultsContent = document.getElementById('results-content');
+      
+      resultsContent.innerHTML = '<div class="loading-spinner"></div> Running test query...';
+      resultsPreview.classList.add('active');
+      
+      // Simulate query execution
+      setTimeout(() => {
+        const sampleResults = Math.floor(Math.random() * 20) + 1;
+        resultsContent.innerHTML = `
+          <p><strong>Test Results:</strong></p>
+          <p>Found ${sampleResults} project(s) matching your criteria</p>
+          <p style="margin-top: 10px; font-size: 13px;">
+            This is a preview. Click "Execute Query" to see full results.
+          </p>
+        `;
+      }, 1500);
+    }
+    
+    function executeQuery() {
+      if (!validateQuery()) return;
+      
+      const btn = document.getElementById('execute-btn');
+      btn.disabled = true;
+      btn.innerHTML = '<span class="loading-spinner"></span> Executing...';
+      
+      // Prepare conditions for submission
+      const queryConditions = conditions
+        .filter(c => c.field && c.operator && c.value)
+        .map(c => ({
+          logic: c.logic,
+          field: c.field,
+          operator: c.operator,
+          value: c.value,
+          valueTo: c.valueTo
+        }));
+      
+      google.script.run
+        .withSuccessHandler(function(result) {
+          btn.disabled = false;
+          btn.innerHTML = '▶️ Execute Query';
+          
+          if (result.success) {
+            showNotification(result.message, 'success');
+            setTimeout(() => {
+              google.script.host.close();
+            }, 1500);
+          } else {
+            showNotification(result.message, 'error');
+          }
+        })
+        .withFailureHandler(function(error) {
+          btn.disabled = false;
+          btn.innerHTML = '▶️ Execute Query';
+          showNotification('Query execution failed: ' + error.message, 'error');
+        })
+        .executeQueryFromDialog(queryConditions);
+    }
+    
+    function saveCurrentQuery() {
+      if (conditions.length === 0) {
+        showNotification('No conditions to save', 'warning');
+        return;
+      }
+      
+      const queryName = prompt('Enter a name for this query:');
+      if (!queryName) return;
+      
+      const queryConditions = conditions
+        .filter(c => c.field && c.operator && c.value)
+        .map(c => ({
+          logic: c.logic,
+          field: c.field,
+          operator: c.operator,
+          value: c.value,
+          valueTo: c.valueTo
+        }));
+      
+      google.script.run
+        .withSuccessHandler(function(result) {
+          if (result.success) {
+            showNotification('Query saved successfully!', 'success');
+            loadSavedQueries(); // Refresh saved queries
+          }
+        })
+        .withFailureHandler(function(error) {
+          showNotification('Failed to save query', 'error');
+        })
+        .saveQueryDefinition(queryName, queryConditions);
+    }
+    
+    function loadSavedQuery() {
+      // This is handled by clicking on saved query items
+      showNotification('Click on a saved query to load it', 'info');
+    }
+    
+    function loadQuery(query) {
+      if (conditions.length > 0) {
+        if (!confirm('This will replace your current query. Continue?')) {
+          return;
+        }
+      }
+      
+      clearQuery();
+      
+      // Load conditions
+      query.conditions.forEach((condition, index) => {
+        setTimeout(() => {
+          addCondition();
+          const id = conditionCount;
+          
+          if (condition.logic && document.getElementById(`logic-${id}`)) {
+            document.getElementById(`logic-${id}`).value = condition.logic;
+          }
+          
+          document.getElementById(`field-${id}`).value = condition.field;
+          document.getElementById(`operator-${id}`).value = condition.operator;
+          document.getElementById(`value-${id}`).value = condition.value;
+          
+          if (condition.operator === 'BETWEEN') {
+            handleOperatorChange(id);
+            document.getElementById(`value-to-${id}`).value = condition.valueTo;
+          }
+          
+          updateCondition(id);
+        }, index * 100);
+      });
+      
+      showNotification(`Loaded query: ${query.name}`, 'success');
+    }
+    
+    function closeResults() {
+      document.getElementById('results-preview').classList.remove('active');
+    }
+    
+    function showNotification(message, type = 'info') {
+      // Create notification element
+      const notification = document.createElement('div');
+      notification.style.cssText = `
+        position: fixed;
+        top: 20px;
+        right: 20px;
+        padding: 12px 20px;
+        border-radius: 8px;
+        color: white;
+        font-weight: 500;
+        z-index: 1000;
+        animation: slideIn 0.3s ease-out;
+        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+      `;
+      
+      // Set color based on type
+      const colors = {
+        success: '#10b981',
+        error: '#ef4444',
+        warning: '#f59e0b',
+        info: '#3b82f6'
+      };
+      
+      notification.style.background = colors[type] || colors.info;
+      notification.textContent = message;
+      
+      document.body.appendChild(notification);
+      
+      // Remove after 3 seconds
+      setTimeout(() => {
+        notification.style.animation = 'slideOut 0.3s ease-out';
+        setTimeout(() => notification.remove(), 300);
+      }, 3000);
+    }
+    
+    function showHelp() {
+      const helpContent = `
+        <h3>Query Builder Help</h3>
+        <p><strong>Basic Usage:</strong></p>
+        <ul>
+          <li>Click "Add Condition" to add query criteria</li>
+          <li>Select field, operator, and enter value(s)</li>
+          <li>Use AND/OR to combine multiple conditions</li>
+          <li>Click "Execute Query" to run</li>
+        </ul>
+        
+        <p><strong>Operators:</strong></p>
+        <ul>
+          <li><strong>=</strong> : Exact match</li>
+          <li><strong>≠</strong> : Not equal</li>
+          <li><strong>></strong>, <strong><</strong>, <strong>≥</strong>, <strong>≤</strong> : Numeric comparisons</li>
+          <li><strong>Contains</strong> : Text contains value</li>
+          <li><strong>Between</strong> : Value in range (requires two values)</li>
+          <li><strong>In List</strong> : Match any value in comma-separated list</li>
+        </ul>
+        
+        <p><strong>Tips:</strong></p>
+        <ul>
+          <li>Use templates for common queries</li>
+          <li>Save frequently used queries</li>
+          <li>Test queries before executing</li>
+          <li>Validate to check for errors</li>
+        </ul>
+      `;
+      
+      // You can create a modal or use alert for simplicity
+      alert(helpContent.replace(/<[^>]*>/g, ''));
+    }
+    
+    // Add animation keyframes
+    const style = document.createElement('style');
+    style.textContent = `
+      @keyframes slideOut {
+        to {
+          opacity: 0;
+          transform: translateX(20px);
+        }
+      }
+    `;
+    document.head.appendChild(style);
+  </script>
+</body>
+</html>

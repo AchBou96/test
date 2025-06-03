@@ -1,0 +1,400 @@
+// ============================================
+// Google Apps Script - UI Integration Functions
+// Missing backend functions referenced in UI files
+// ============================================
+
+// For CurrencyConversionUI.html - Consolidate the applyExchangeRate function
+function applyExchangeRate(rate) {
+  // Check if we're in project analysis context
+  const selectedProject = PropertiesService.getScriptProperties().getProperty('CURRENT_PROJECT');
+  
+  if (selectedProject) {
+    // Called from project analysis flow
+    const project = JSON.parse(selectedProject);
+    performProjectAnalysis(project.projectNumber, rate);
+  } else {
+    // Called from query builder or other contexts
+    const props = PropertiesService.getScriptProperties();
+    const data = JSON.parse(props.getProperty('CURRENCY_CONVERSION_DATA') || '{}');
+    
+    // Store rate for current analysis
+    props.setProperty('EXCHANGE_RATE_' + data.projectNumber, rate.toString());
+    
+    // Clean up
+    props.deleteProperty('CURRENCY_CONVERSION_DATA');
+    
+    return {success: true};
+  }
+}
+
+// For ManualCategorizationUI.html - Get items data for UI
+function getManualCategorizationData() {
+  const analysisData = JSON.parse(PropertiesService.getScriptProperties().getProperty('ANALYSIS_DATA') || '{}');
+  const categories = getCategoryKeywords();
+  
+  // Format items for UI
+  const items = analysisData.uncategorizedItems || [];
+  const formattedItems = items.map((item, index) => ({
+    index: index,
+    description: item.description,
+    eacCost: formatNumber(item.eacCost, '#,##0'),
+    budgetCost: formatNumber(item.budgetCost, '#,##0')
+  }));
+  
+  // Format categories for UI
+  const formattedCategories = [];
+  for (const mainCat in categories) {
+    const subcategories = [];
+    for (const subcat in categories[mainCat]) {
+      subcategories.push({
+        name: subcat,
+        key: `${mainCat}|${subcat}`
+      });
+    }
+    formattedCategories.push({
+      name: mainCat,
+      subcategories: subcategories
+    });
+  }
+  
+  return {
+    items: formattedItems,
+    categories: formattedCategories
+  };
+}
+
+// For ProjectComparisonUI.html - Get project data formatted for UI
+function getProjectsWithDetails() {
+  const projects = getProjectsForComparison();
+  
+  // Add display symbols and formatting
+  return projects.map(project => ({
+    ...project,
+    displayCost: formatNumber(project.eacCost, '#,##0'),
+    displayFlowrate: project.flowrate ? formatNumber(project.flowrate, '#,##0') : 'N/A',
+    technologyAbbrev: getTechnologyAbbreviation(project.technology)
+  }));
+}
+
+// Helper function for technology abbreviation
+function getTechnologyAbbreviation(technology) {
+  const abbreviations = {
+    'MBR': 'MBR',
+    'RO': 'RO',
+    'UF': 'UF',
+    'EDR': 'EDR',
+    'Complex': 'Complex',
+    'EDR/EDI': 'EDR',
+    'Pressurized UF': 'UF'
+  };
+  return abbreviations[technology] || technology;
+}
+
+// For SaveToDatabaseUI.html - Get project info for display
+function getCurrentProjectInfo() {
+  const props = PropertiesService.getScriptProperties();
+  const savedData = JSON.parse(props.getProperty('SAVE_TO_DB_DATA') || '{}');
+  
+  return {
+    projectName: savedData.projectName || 'Unknown Project',
+    projectNumber: savedData.projectNumber || 'Unknown'
+  };
+}
+
+// For WaterfallChartUI.html - Format data for interactive chart
+function getFormattedWaterfallData() {
+  const rawData = getWaterfallChartData();
+  
+  // Add additional formatting and calculations
+  rawData.categories = rawData.categories.map(category => {
+    // Sort subcategories by impact
+    category.subcategories.sort((a, b) => 
+      Math.abs(b.eac - b.budget) - Math.abs(a.eac - a.budget)
+    );
+    
+    // Add variance calculations
+    category.variance = category.eac - category.budget;
+    category.variancePercent = category.budget > 0 ? 
+      ((category.eac - category.budget) / category.budget * 100).toFixed(1) : 0;
+    
+    return category;
+  });
+  
+  // Find biggest impact
+  let biggestImpact = { name: '', variance: 0 };
+  rawData.categories.forEach(cat => {
+    if (Math.abs(cat.variance) > Math.abs(biggestImpact.variance)) {
+      biggestImpact = { name: cat.name, variance: cat.variance };
+    }
+    
+    cat.subcategories.forEach(sub => {
+      const subVariance = sub.eac - sub.budget;
+      if (Math.abs(subVariance) > Math.abs(biggestImpact.variance)) {
+        biggestImpact = { name: `${cat.name} - ${sub.name}`, variance: subVariance };
+      }
+    });
+  });
+  
+  rawData.biggestImpact = biggestImpact;
+  
+  return rawData;
+}
+
+// For QueryBuilderUI.html - Additional helper functions
+function getQueryTemplates() {
+  return [
+    {
+      id: 'high-cost',
+      name: 'High Cost Projects',
+      description: 'Projects > 1M EUR',
+      conditions: [{
+        field: 'EAC Cost (EUR)',
+        operator: '>',
+        value: '1000000'
+      }]
+    },
+    {
+      id: 'over-budget',
+      name: 'Over Budget',
+      description: 'EAC > Budget',
+      type: 'custom'
+    },
+    {
+      id: 'technology',
+      name: 'By Technology',
+      description: 'Filter by tech type',
+      conditions: [{
+        field: 'Technology Type',
+        operator: '=',
+        value: ''
+      }]
+    },
+    {
+      id: 'high-flow',
+      name: 'High Flowrate',
+      description: 'Flowrate > 500 m³/h',
+      conditions: [{
+        field: 'Flowrate (m3/h)',
+        operator: '>',
+        value: '500'
+      }]
+    },
+    {
+      id: 'risk',
+      name: 'High Risk',
+      description: 'Variance > 15%',
+      type: 'custom'
+    },
+    {
+      id: 'efficiency',
+      name: 'High Equipment Ratio',
+      description: 'Equipment > 70%',
+      type: 'custom'
+    }
+  ];
+}
+
+// For Export Module - Create HTML export preview
+function previewExportSelection(exportType) {
+  const summarySheets = getSummarySheets();
+  
+  if (summarySheets.length === 0) {
+    return {
+      success: false,
+      message: 'No project summary sheets found.'
+    };
+  }
+  
+  const sheetList = summarySheets.map((sheet, index) => ({
+    index: index,
+    name: sheet.getName().replace(' Summary', ''),
+    selected: false
+  }));
+  
+  return {
+    success: true,
+    sheets: sheetList,
+    exportType: exportType
+  };
+}
+
+// For Database Setup - Validate sheet structure
+function validateSheetStructure(sheetName) {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const sheet = ss.getSheetByName(sheetName);
+  
+  if (!sheet) {
+    return {
+      valid: false,
+      error: 'Sheet not found'
+    };
+  }
+  
+  const lastRow = sheet.getLastRow();
+  const lastCol = sheet.getLastColumn();
+  
+  if (lastRow < 2) {
+    return {
+      valid: false,
+      error: 'Sheet must contain at least one data row'
+    };
+  }
+  
+  if (lastCol < 6) {
+    return {
+      valid: false,
+      error: 'Sheet must contain at least 6 columns'
+    };
+  }
+  
+  // Check for headers
+  const headers = sheet.getRange(1, 1, 1, lastCol).getValues()[0];
+  const hasHeaders = headers.some(h => h && typeof h === 'string' && h.length > 0);
+  
+  if (!hasHeaders) {
+    return {
+      valid: false,
+      error: 'Sheet must contain headers in the first row'
+    };
+  }
+  
+  return {
+    valid: true,
+    rowCount: lastRow,
+    columnCount: lastCol,
+    sampleHeaders: headers.slice(0, 10)
+  };
+}
+
+// Helper function to get suggested column mappings
+function getSuggestedMappings(sheetName) {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const sheet = ss.getSheetByName(sheetName);
+  
+  if (!sheet) return {};
+  
+  const headers = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0];
+  const suggestions = {};
+  
+  // Define keywords to look for in headers
+  const mappingKeywords = {
+    projectNumber: ['number', 'project no', 'proj no', 'id', 'code'],
+    projectName: ['name', 'project name', 'description', 'title'],
+    eacCost: ['eac', 'estimate', 'cost', 'total'],
+    budgetedCost: ['budget', 'planned', 'baseline'],
+    currency: ['currency', 'curr', 'ccy'],
+    itemDescription: ['item', 'description', 'line', 'detail']
+  };
+  
+  // Search for matching headers
+  headers.forEach((header, index) => {
+    const headerLower = header.toString().toLowerCase();
+    
+    for (const [field, keywords] of Object.entries(mappingKeywords)) {
+      if (keywords.some(keyword => headerLower.includes(keyword))) {
+        if (!suggestions[field]) {
+          suggestions[field] = columnToLetter(index + 1);
+        }
+      }
+    }
+  });
+  
+  return suggestions;
+}
+
+// Function to test database connection
+function testDatabaseConnection() {
+  try {
+    const config = getConfig();
+    if (!config) {
+      return {
+        success: false,
+        message: 'No database configuration found'
+      };
+    }
+    
+    const ss = SpreadsheetApp.getActiveSpreadsheet();
+    const sheet = ss.getSheetByName(config.SourceSheet);
+    
+    if (!sheet) {
+      return {
+        success: false,
+        message: 'Configured source sheet not found'
+      };
+    }
+    
+    const lastRow = sheet.getLastRow();
+    const projectCount = lastRow > 1 ? lastRow - 1 : 0;
+    
+    return {
+      success: true,
+      message: `Database connected successfully. Found ${projectCount} project entries.`,
+      projectCount: projectCount
+    };
+  } catch (error) {
+    return {
+      success: false,
+      message: 'Database connection error: ' + error.toString()
+    };
+  }
+}
+
+// Function to clear saved queries
+function clearSavedQueries() {
+  const props = PropertiesService.getDocumentProperties();
+  props.deleteProperty('SAVED_QUERIES');
+  return {success: true, message: 'All saved queries have been cleared.'};
+}
+
+// Function to export saved queries
+function exportSavedQueries() {
+  const queries = getSavedQueries();
+  
+  if (queries.length === 0) {
+    return {
+      success: false,
+      message: 'No saved queries to export'
+    };
+  }
+  
+  // Create export sheet
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const exportSheet = createOrClearSheet('Exported Queries');
+  
+  // Headers
+  exportSheet.getRange('A1').setValue('SAVED QUERIES EXPORT');
+  exportSheet.getRange('A1').setFontSize(16).setFontWeight('bold');
+  
+  exportSheet.getRange('A3').setValue('Export Date:');
+  exportSheet.getRange('B3').setValue(new Date().toLocaleDateString());
+  
+  // Query details
+  let currentRow = 5;
+  queries.forEach((query, index) => {
+    exportSheet.getRange(`A${currentRow}`).setValue(`Query ${index + 1}: ${query.name}`);
+    exportSheet.getRange(`A${currentRow}`).setFontWeight('bold');
+    
+    currentRow++;
+    exportSheet.getRange(`A${currentRow}`).setValue('Saved:');
+    exportSheet.getRange(`B${currentRow}`).setValue(new Date(query.date).toLocaleDateString());
+    
+    currentRow++;
+    exportSheet.getRange(`A${currentRow}`).setValue('Conditions:');
+    
+    query.conditions.forEach(condition => {
+      currentRow++;
+      const conditionText = `${condition.logic || ''} ${condition.field} ${condition.operator} ${condition.value} ${condition.valueTo || ''}`;
+      exportSheet.getRange(`B${currentRow}`).setValue(conditionText);
+    });
+    
+    currentRow += 2;
+  });
+  
+  exportSheet.autoResizeColumns(1, 2);
+  ss.setActiveSheet(exportSheet);
+  
+  return {
+    success: true,
+    message: `Exported ${queries.length} saved queries to sheet "Exported Queries"`
+  };
+}

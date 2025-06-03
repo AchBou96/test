@@ -1,0 +1,782 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <base target="_top">
+  <style>
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+    
+    body {
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      padding: 20px;
+      min-height: 100vh;
+    }
+    
+    .container {
+      max-width: 1000px;
+      margin: 0 auto;
+      background: white;
+      border-radius: 20px;
+      box-shadow: 0 20px 60px rgba(0, 0, 0, 0.2);
+      overflow: hidden;
+    }
+    
+    .header {
+      background: rgba(0, 0, 0, 0.05);
+      padding: 30px;
+      text-align: center;
+      border-bottom: 1px solid rgba(0, 0, 0, 0.1);
+    }
+    
+    .header h1 {
+      font-size: 28px;
+      color: #333;
+      margin-bottom: 10px;
+    }
+    
+    .header p {
+      color: #666;
+      font-size: 16px;
+    }
+    
+    .content {
+      display: flex;
+      height: 600px;
+    }
+    
+    .projects-panel, .parameters-panel {
+      flex: 1;
+      padding: 30px;
+      overflow-y: auto;
+    }
+    
+    .projects-panel {
+      border-right: 1px solid #e9ecef;
+    }
+    
+    .section-title {
+      font-size: 18px;
+      font-weight: 600;
+      color: #333;
+      margin-bottom: 20px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+    
+    .selected-count {
+      background: #667eea;
+      color: white;
+      padding: 4px 12px;
+      border-radius: 20px;
+      font-size: 14px;
+      font-weight: 500;
+    }
+    
+    .search-box {
+      width: 100%;
+      padding: 12px 20px;
+      border: 2px solid #e9ecef;
+      border-radius: 10px;
+      font-size: 15px;
+      margin-bottom: 20px;
+      transition: all 0.3s ease;
+    }
+    
+    .search-box:focus {
+      outline: none;
+      border-color: #667eea;
+      box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+    }
+    
+    .project-list, .parameter-list {
+      display: grid;
+      gap: 10px;
+    }
+    
+    .loading-state {
+      text-align: center;
+      padding: 60px 20px;
+      color: #666;
+    }
+    
+    .loading-spinner {
+      width: 40px;
+      height: 40px;
+      border: 3px solid #f3f3f3;
+      border-top: 3px solid #667eea;
+      border-radius: 50%;
+      animation: spin 1s linear infinite;
+      margin: 0 auto 20px;
+    }
+    
+    @keyframes spin {
+      0% { transform: rotate(0deg); }
+      100% { transform: rotate(360deg); }
+    }
+    
+    .empty-state {
+      text-align: center;
+      padding: 60px 20px;
+      color: #adb5bd;
+    }
+    
+    .empty-state-icon {
+      font-size: 48px;
+      margin-bottom: 10px;
+    }
+    
+    .project-item, .parameter-item {
+      background: #f8f9fa;
+      border: 2px solid transparent;
+      border-radius: 10px;
+      padding: 15px;
+      cursor: pointer;
+      transition: all 0.2s ease;
+      position: relative;
+    }
+    
+    .project-item:hover, .parameter-item:hover {
+      background: #e9ecef;
+      transform: translateY(-2px);
+    }
+    
+    .project-item.selected, .parameter-item.selected {
+      background: #f3f0ff;
+      border-color: #667eea;
+    }
+    
+    .project-number {
+      font-weight: 600;
+      color: #667eea;
+      font-size: 14px;
+      margin-bottom: 5px;
+    }
+    
+    .project-name {
+      color: #333;
+      font-size: 15px;
+      margin-bottom: 8px;
+    }
+    
+    .project-details {
+      display: flex;
+      gap: 15px;
+      font-size: 13px;
+      color: #666;
+      flex-wrap: wrap;
+    }
+    
+    .detail-item {
+      display: flex;
+      align-items: center;
+      gap: 5px;
+    }
+    
+    .checkbox {
+      position: absolute;
+      top: 15px;
+      right: 15px;
+      width: 20px;
+      height: 20px;
+      border: 2px solid #dee2e6;
+      border-radius: 4px;
+      background: white;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    
+    .project-item.selected .checkbox,
+    .parameter-item.selected .checkbox {
+      background: #667eea;
+      border-color: #667eea;
+    }
+    
+    .project-item.selected .checkbox::after,
+    .parameter-item.selected .checkbox::after {
+      content: '✓';
+      color: white;
+      font-size: 14px;
+    }
+    
+    .parameter-category {
+      margin-bottom: 25px;
+    }
+    
+    .category-header {
+      font-weight: 600;
+      color: #495057;
+      margin-bottom: 10px;
+      font-size: 14px;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+    
+    .parameter-item {
+      padding: 12px 15px;
+    }
+    
+    .parameter-name {
+      color: #333;
+      font-size: 15px;
+    }
+    
+    .footer {
+      padding: 20px 30px;
+      background: #f8f9fa;
+      border-top: 1px solid #e9ecef;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    
+    .summary {
+      font-size: 15px;
+      color: #666;
+    }
+    
+    .summary strong {
+      color: #333;
+      font-weight: 600;
+    }
+    
+    .button-group {
+      display: flex;
+      gap: 10px;
+    }
+    
+    .btn {
+      padding: 12px 24px;
+      border: none;
+      border-radius: 8px;
+      font-size: 15px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.3s ease;
+    }
+    
+    .btn-secondary {
+      background: #e9ecef;
+      color: #495057;
+    }
+    
+    .btn-secondary:hover {
+      background: #dee2e6;
+    }
+    
+    .btn-primary {
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      color: white;
+    }
+    
+    .btn-primary:hover:not(:disabled) {
+      transform: translateY(-2px);
+      box-shadow: 0 5px 15px rgba(102, 126, 234, 0.4);
+    }
+    
+    .btn:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+    }
+    
+    .select-all-btn {
+      font-size: 13px;
+      color: #667eea;
+      background: none;
+      border: none;
+      cursor: pointer;
+      text-decoration: underline;
+    }
+    
+    .select-all-btn:hover {
+      color: #5a67d8;
+    }
+    
+    .loading {
+      display: none;
+      position: absolute;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background: rgba(255, 255, 255, 0.95);
+      z-index: 100;
+      align-items: center;
+      justify-content: center;
+      flex-direction: column;
+    }
+    
+    .loading.active {
+      display: flex;
+    }
+    
+    .error-message {
+      background: #f8d7da;
+      color: #721c24;
+      padding: 15px 20px;
+      border-radius: 8px;
+      margin: 20px;
+      border: 1px solid #f5c6cb;
+      text-align: center;
+    }
+    
+    .skeleton {
+      background: linear-gradient(90deg, #f0f0f0 25%, #e0e0e0 50%, #f0f0f0 75%);
+      background-size: 200% 100%;
+      animation: loading 1.5s infinite;
+      border-radius: 8px;
+      margin-bottom: 10px;
+    }
+    
+    .skeleton.project {
+      height: 90px;
+    }
+    
+    @keyframes loading {
+      0% { background-position: 200% 0; }
+      100% { background-position: -200% 0; }
+    }
+    
+    .project-scope {
+      display: inline-block;
+      background: #e7f3ff;
+      color: #0066cc;
+      padding: 2px 8px;
+      border-radius: 12px;
+      font-size: 11px;
+      font-weight: 600;
+      margin-left: 5px;
+    }
+    
+    .no-results {
+      text-align: center;
+      padding: 40px;
+      color: #6c757d;
+      font-style: italic;
+    }
+    
+    @media (max-width: 1024px) {
+      .main-content {
+        flex-direction: column;
+        height: auto;
+      }
+      
+      .sidebar {
+        width: 100%;
+        border-left: none;
+        border-top: 1px solid #e2e8f0;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="header">
+      <h1>Project Comparison Tool</h1>
+      <p>Select projects and parameters to generate a comprehensive comparison</p>
+    </div>
+    
+    <div class="content">
+      <div class="projects-panel">
+        <div class="section-title">
+          Select Projects
+          <span class="selected-count" id="projectCount">0 selected</span>
+        </div>
+        
+        <input type="text" class="search-box" placeholder="Search projects..." 
+               id="searchBox" onkeyup="filterProjects(this.value)">
+        
+        <button class="select-all-btn" onclick="selectAllProjects()">Select All Visible</button>
+        
+        <div class="project-list" id="projectList">
+          <div class="loading-state">
+            <div class="loading-spinner"></div>
+            <p>Loading projects from database...</p>
+          </div>
+        </div>
+      </div>
+      
+      <div class="parameters-panel">
+        <div class="section-title">
+          Select Parameters
+          <span class="selected-count" id="paramCount">0 selected</span>
+        </div>
+        
+        <div class="parameter-category">
+          <div class="category-header">Financial Metrics</div>
+          <div class="parameter-list">
+            <div class="parameter-item" data-param="eac">
+              <div class="parameter-name">EAC Cost (kEUR)</div>
+              <div class="checkbox"></div>
+            </div>
+            <div class="parameter-item" data-param="budget">
+              <div class="parameter-name">Budgeted Cost (kEUR)</div>
+              <div class="checkbox"></div>
+            </div>
+            <div class="parameter-item" data-param="variance">
+              <div class="parameter-name">Cost Variance</div>
+              <div class="checkbox"></div>
+            </div>
+          </div>
+        </div>
+        
+        <div class="parameter-category">
+          <div class="category-header">Technical Specifications</div>
+          <div class="parameter-list">
+            <div class="parameter-item" data-param="flowrate">
+              <div class="parameter-name">Flowrate (m³/h)</div>
+              <div class="checkbox"></div>
+            </div>
+            <div class="parameter-item" data-param="technology">
+              <div class="parameter-name">Technology Type</div>
+              <div class="checkbox"></div>
+            </div>
+            <div class="parameter-item" data-param="tech-details">
+              <div class="parameter-name">Technology Details</div>
+              <div class="checkbox"></div>
+            </div>
+            <div class="parameter-item" data-param="market">
+              <div class="parameter-name">Project Market</div>
+              <div class="checkbox"></div>
+            </div>
+          </div>
+        </div>
+        
+        <div class="parameter-category">
+          <div class="category-header">Cost Ratios</div>
+          <div class="parameter-list">
+            <div class="parameter-item" data-param="labor-pct">
+              <div class="parameter-name">Total Labor %</div>
+              <div class="checkbox"></div>
+            </div>
+            <div class="parameter-item" data-param="equipment-pct">
+              <div class="parameter-name">Total Equipment %</div>
+              <div class="checkbox"></div>
+            </div>
+            <div class="parameter-item" data-param="membranes-pct">
+              <div class="parameter-name">Membranes %</div>
+              <div class="checkbox"></div>
+            </div>
+            <div class="parameter-item" data-param="pumps-pct">
+              <div class="parameter-name">Pumps %</div>
+              <div class="checkbox"></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    
+    <div class="footer">
+      <div class="summary">
+        <strong id="selectedProjectCount">0</strong> projects × 
+        <strong id="selectedParamCount">0</strong> parameters selected
+      </div>
+      <div class="button-group">
+        <button class="btn btn-secondary" onclick="cancel()">Cancel</button>
+        <button class="btn btn-primary" onclick="generateComparison()" disabled id="compareBtn">
+          Generate Comparison
+        </button>
+      </div>
+    </div>
+    
+    <div class="loading">
+      <div class="loading-spinner"></div>
+      <p>Generating comparison report...</p>
+    </div>
+  </div>
+  
+  <script>
+    let selectedProjects = new Set();
+    let selectedParameters = new Set();
+    let allProjects = [];
+    let visibleProjects = [];
+    
+    // Load projects on startup
+    window.onload = function() {
+      loadProjects();
+      setupParameterListeners();
+    };
+    
+    function loadProjects() {
+      google.script.run
+        .withSuccessHandler(displayProjects)
+        .withFailureHandler(handleError)
+        .getProjectsForComparison();
+    }
+    
+    function displayProjects(projects) {
+      const projectList = document.getElementById('projectList');
+      
+      if (!projects || projects.length === 0) {
+        projectList.innerHTML = `
+          <div class="empty-state">
+            <div class="empty-state-icon">📋</div>
+            <p>No projects found in database</p>
+            <p style="font-size: 13px; margin-top: 10px;">
+              Analyze some projects first to create comparisons
+            </p>
+          </div>
+        `;
+        return;
+      }
+      
+      allProjects = projects;
+      visibleProjects = projects;
+      projectList.innerHTML = '';
+      
+      projects.forEach((project, index) => {
+        const projectItem = createProjectItem(project, index);
+        projectList.appendChild(projectItem);
+      });
+      
+      updateProjectCount();
+    }
+    
+    function createProjectItem(project, index) {
+      const item = document.createElement('div');
+      item.className = 'project-item';
+      item.dataset.index = project.index;
+      item.dataset.searchText = `${project.projectNumber} ${project.projectName} ${project.technology || ''} ${project.market || ''}`.toLowerCase();
+      
+      // Format cost display
+      const costDisplay = project.eacCost ? 
+        project.eacCost.toFixed(0) + 'k EUR' : 'N/A';
+      
+      // Format flowrate display
+      const flowrateDisplay = project.flowrate ? 
+        project.flowrate.toFixed(0) + ' m³/h' : 'N/A';
+      
+      // Technology abbreviation
+      const techDisplay = project.technology || 'N/A';
+      
+      // Build detail items HTML
+      let detailsHTML = '';
+      if (project.eacCost) {
+        detailsHTML += `
+          <div class="detail-item">
+            <span>💰</span> ${costDisplay}
+          </div>
+        `;
+      }
+      
+      if (project.flowrate) {
+        detailsHTML += `
+          <div class="detail-item">
+            <span>💧</span> ${flowrateDisplay}
+          </div>
+        `;
+      }
+      
+      if (project.technology) {
+        detailsHTML += `
+          <div class="detail-item">
+            <span>⚙️</span> ${techDisplay}
+          </div>
+        `;
+      }
+      
+      if (project.market) {
+        detailsHTML += `
+          <div class="detail-item">
+            <span>🏢</span> ${project.market}
+          </div>
+        `;
+      }
+      
+      // Check if project is over budget
+      let varianceIndicator = '';
+      if (project.budgetCost && project.eacCost) {
+        if (project.variance < 0) {
+          varianceIndicator = '<span style="color: #dc3545; font-weight: 600; margin-left: 10px;">Over Budget</span>';
+        } else if (project.variance > 0) {
+          varianceIndicator = '<span style="color: #28a745; font-weight: 600; margin-left: 10px;">Under Budget</span>';
+        }
+      }
+      
+      item.innerHTML = `
+        <div class="project-number">${escapeHtml(project.projectNumber)}</div>
+        <div class="project-name">
+          ${escapeHtml(project.projectName)}
+          ${varianceIndicator}
+        </div>
+        <div class="project-details">
+          ${detailsHTML}
+        </div>
+        <div class="checkbox"></div>
+      `;
+      
+      item.addEventListener('click', function() {
+        toggleProjectSelection(project.index);
+      });
+      
+      return item;
+    }
+    
+    function toggleProjectSelection(index) {
+      if (selectedProjects.has(index)) {
+        selectedProjects.delete(index);
+        document.querySelector(`[data-index="${index}"]`).classList.remove('selected');
+      } else {
+        selectedProjects.add(index);
+        document.querySelector(`[data-index="${index}"]`).classList.add('selected');
+      }
+      updateCounts();
+    }
+    
+    function setupParameterListeners() {
+      document.querySelectorAll('.parameter-item').forEach(item => {
+        item.addEventListener('click', function() {
+          const param = this.dataset.param;
+          if (selectedParameters.has(param)) {
+            selectedParameters.delete(param);
+            this.classList.remove('selected');
+          } else {
+            selectedParameters.add(param);
+            this.classList.add('selected');
+          }
+          updateCounts();
+        });
+      });
+    }
+    
+    function updateCounts() {
+      document.getElementById('projectCount').textContent = selectedProjects.size + ' selected';
+      document.getElementById('paramCount').textContent = selectedParameters.size + ' selected';
+      document.getElementById('selectedProjectCount').textContent = selectedProjects.size;
+      document.getElementById('selectedParamCount').textContent = selectedParameters.size;
+      
+      // Enable compare button if at least 2 projects and 1 parameter selected
+      document.getElementById('compareBtn').disabled = 
+        selectedProjects.size < 2 || selectedParameters.size < 1;
+    }
+    
+    function updateProjectCount() {
+      const total = allProjects.length;
+      const visible = visibleProjects.length;
+      const selected = selectedProjects.size;
+      
+      if (visible < total) {
+        document.getElementById('projectCount').textContent = 
+          `${selected} selected (${visible} visible)`;
+      } else {
+        document.getElementById('projectCount').textContent = 
+          `${selected} selected`;
+      }
+    }
+    
+    function filterProjects(searchText) {
+      const search = searchText.toLowerCase().trim();
+      const projectList = document.getElementById('projectList');
+      
+      if (!search) {
+        // Show all projects
+        visibleProjects = allProjects;
+        document.querySelectorAll('.project-item').forEach(item => {
+          item.style.display = '';
+        });
+      } else {
+        // Filter projects
+        visibleProjects = [];
+        document.querySelectorAll('.project-item').forEach(item => {
+          const text = item.dataset.searchText;
+          if (text.includes(search)) {
+            item.style.display = '';
+            const index = parseInt(item.dataset.index);
+            const project = allProjects.find(p => p.index === index);
+            if (project) visibleProjects.push(project);
+          } else {
+            item.style.display = 'none';
+          }
+        });
+      }
+      
+      // Show no results message if needed
+      if (visibleProjects.length === 0) {
+        if (!document.querySelector('.no-results')) {
+          const noResults = document.createElement('div');
+          noResults.className = 'no-results';
+          noResults.textContent = 'No projects match your search';
+          projectList.appendChild(noResults);
+        }
+      } else {
+        const noResults = document.querySelector('.no-results');
+        if (noResults) noResults.remove();
+      }
+      
+      updateProjectCount();
+    }
+    
+    function selectAllProjects() {
+      // Select all visible projects
+      visibleProjects.forEach(project => {
+        if (!selectedProjects.has(project.index)) {
+          selectedProjects.add(project.index);
+          document.querySelector(`[data-index="${project.index}"]`).classList.add('selected');
+        }
+      });
+      updateCounts();
+    }
+    
+    function generateComparison() {
+      document.querySelector('.loading').classList.add('active');
+      
+      const data = {
+        projects: Array.from(selectedProjects),
+        parameters: Array.from(selectedParameters)
+      };
+      
+      // Send to Google Apps Script
+      google.script.run
+        .withSuccessHandler(onSuccess)
+        .withFailureHandler(onError)
+        .generateComparison(data);
+    }
+    
+    function handleError(error) {
+      console.error('Error:', error);
+      const projectList = document.getElementById('projectList');
+      projectList.innerHTML = `
+        <div class="error-message">
+          Failed to load projects: ${error.message || 'Unknown error'}
+        </div>
+      `;
+    }
+    
+    function onSuccess() {
+      google.script.host.close();
+    }
+    
+    function onError(error) {
+      document.querySelector('.loading').classList.remove('active');
+      alert('Error: ' + error.message);
+    }
+    
+    function cancel() {
+      google.script.host.close();
+    }
+    
+    function escapeHtml(text) {
+      const div = document.createElement('div');
+      div.textContent = text || '';
+      return div.innerHTML;
+    }
+    
+    // Keyboard shortcuts
+    document.addEventListener('keydown', function(e) {
+      if (e.key === 'Enter' && !document.getElementById('compareBtn').disabled) {
+        generateComparison();
+      } else if (e.key === 'Escape') {
+        cancel();
+      } else if (e.ctrlKey && e.key === 'a' && document.activeElement.id !== 'searchBox') {
+        e.preventDefault();
+        selectAllProjects();
+      }
+    });
+  </script>
+</body>
+</html>

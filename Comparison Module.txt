@@ -1,0 +1,371 @@
+// ============================================
+// Google Apps Script - Comparison Module with Integrated UI
+// ============================================
+
+function compareProjects() {
+    const ss = SpreadsheetApp.getActiveSpreadsheet();
+    const ui = SpreadsheetApp.getUi();
+    
+    // Check database exists
+    const dbSheet = ss.getSheetByName('Project Analysis Database');
+    if (!dbSheet) {
+      ui.alert('No analysis database found. Please analyze projects first.');
+      return;
+    }
+    
+    // Check if there are projects
+    if (!dbSheet.getRange('A2').getValue()) {
+      ui.alert('No projects in database. Please analyze projects first.');
+      return;
+    }
+    
+    // Show interactive comparison UI
+    const html = HtmlService.createHtmlOutputFromFile('ProjectComparisonUI')
+      .setWidth(1000)
+      .setHeight(700);
+    
+    ui.showModalDialog(html, 'Project Comparison Tool');
+  }
+  
+  // Get projects data for comparison UI
+  function getProjectsForComparison() {
+    const ss = SpreadsheetApp.getActiveSpreadsheet();
+    const dbSheet = ss.getSheetByName('Project Analysis Database');
+    
+    if (!dbSheet) return [];
+    
+    const lastRow = dbSheet.getLastRow();
+    const lastCol = dbSheet.getLastColumn();
+    
+    if (lastRow < 2) return [];
+    
+    const projects = [];
+    
+    for (let i = 2; i <= lastRow; i++) {
+      const project = {
+        index: i - 2,
+        row: i,
+        projectNumber: dbSheet.getRange(i, 1).getValue(),
+        projectName: dbSheet.getRange(i, 2).getValue(),
+        eacCost: dbSheet.getRange(i, 4).getValue() / 1000, // Convert to kEUR
+        budgetCost: dbSheet.getRange(i, 5).getValue() / 1000,
+        flowrate: dbSheet.getRange(i, 6).getValue(),
+        technology: dbSheet.getRange(i, 7).getValue(),
+        techDetails: dbSheet.getRange(i, 8).getValue(),
+        market: dbSheet.getRange(i, 9).getValue()
+      };
+      
+      // Calculate basic metrics
+      project.variance = project.eacCost - project.budgetCost;
+      project.variancePercent = project.budgetCost > 0 ? 
+        ((project.eacCost - project.budgetCost) / project.budgetCost * 100).toFixed(1) : 0;
+      
+      projects.push(project);
+    }
+    
+    return projects;
+  }
+  
+  // Get available parameters for comparison
+  function getComparisonParameters() {
+    const dbSheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName('Project Analysis Database');
+    if (!dbSheet) return [];
+    
+    const lastCol = dbSheet.getLastColumn();
+    const headers = [];
+    
+    // Get all headers
+    for (let i = 1; i <= lastCol; i++) {
+      const header = dbSheet.getRange(1, i).getValue();
+      if (header) {
+        headers.push({
+          id: `col-${i}`,
+          name: header,
+          column: i
+        });
+      }
+    }
+    
+    return headers;
+  }
+  
+  // Generate comparison from UI selection
+  function generateComparison(data) {
+    const ss = SpreadsheetApp.getActiveSpreadsheet();
+    const dbSheet = ss.getSheetByName('Project Analysis Database');
+    
+    if (!dbSheet) return;
+    
+    // Map selected project indices to rows
+    const selectedProjects = data.projects.map(index => parseInt(index) + 2);
+    
+    // Map parameter IDs to column indices
+    const parameterMap = {
+      'eac': 4,
+      'budget': 5,
+      'variance': -1, // Calculated field
+      'flowrate': 6,
+      'technology': 7,
+      'tech-details': 8,
+      'labor-pct': -2, // Calculated from columns 10-13
+      'equipment-pct': -3, // Calculated
+      'membranes-pct': 14,
+      'pumps-pct': 25
+    };
+    
+    const selectedParams = data.parameters.map(param => ({
+      id: param,
+      column: parameterMap[param] || 0
+    }));
+    
+    // Create comparison sheet
+    createComparisonSheet(dbSheet, selectedProjects, selectedParams);
+  }
+  
+  function createComparisonSheet(dbSheet, selectedProjects, selectedParams) {
+    const ss = SpreadsheetApp.getActiveSpreadsheet();
+    const compareSheet = createOrClearSheet('Project Comparison');
+    
+    // Header
+    compareSheet.getRange('A1:H1').merge();
+    compareSheet.getRange('A1').setValue('PROJECT COMPARISON ANALYSIS');
+    compareSheet.getRange('A1').setFontSize(16).setFontWeight('bold').setHorizontalAlignment('center');
+    
+    compareSheet.getRange('A3').setValue('Comparison Date:');
+    compareSheet.getRange('C3').setValue(new Date().toLocaleDateString());
+    compareSheet.getRange('A4').setValue('Projects Compared:');
+    compareSheet.getRange('C4').setValue(selectedProjects.length);
+    
+    // Create comparison table
+    let currentRow = 6;
+    compareSheet.getRange(`A${currentRow}`).setValue('Parameter');
+    
+    // Add project headers
+    let col = 2;
+    for (const projRow of selectedProjects) {
+      compareSheet.getRange(currentRow, col).setValue(dbSheet.getRange(projRow, 2).getValue());
+      col++;
+    }
+    
+    // Format headers
+    compareSheet.getRange(currentRow, 1, 1, col - 1)
+      .setFontWeight('bold')
+      .setBackground('#C8C8C8');
+    
+    // Add parameter data
+    for (const param of selectedParams) {
+      currentRow++;
+      
+      // Handle special calculated fields
+      if (param.column === -1) { // Variance
+        compareSheet.getRange(currentRow, 1).setValue('Cost Variance (kEUR)');
+        col = 2;
+        for (const projRow of selectedProjects) {
+          const eac = dbSheet.getRange(projRow, 4).getValue();
+          const budget = dbSheet.getRange(projRow, 5).getValue();
+          const variance = (budget - eac) / 1000;
+          compareSheet.getRange(currentRow, col).setValue(variance).setNumberFormat('#,##0.0');
+          if (variance < 0) {
+            compareSheet.getRange(currentRow, col).setFontColor('#FF0000');
+          } else {
+            compareSheet.getRange(currentRow, col).setFontColor('#008000');
+          }
+          col++;
+        }
+      } else if (param.column === -2) { // Labor percentage
+        compareSheet.getRange(currentRow, 1).setValue('Total Labor %');
+        col = 2;
+        for (const projRow of selectedProjects) {
+          let laborTotal = 0;
+          for (let i = 10; i <= 13; i++) {
+            const val = dbSheet.getRange(projRow, i).getValue();
+            if (!isNaN(val)) laborTotal += parseFloat(val);
+          }
+          compareSheet.getRange(currentRow, col).setValue(laborTotal).setNumberFormat('0.0%');
+          col++;
+        }
+      } else if (param.column === -3) { // Equipment percentage
+        compareSheet.getRange(currentRow, 1).setValue('Total Equipment %');
+        col = 2;
+        for (const projRow of selectedProjects) {
+          let laborTotal = 0;
+          for (let i = 10; i <= 13; i++) {
+            const val = dbSheet.getRange(projRow, i).getValue();
+            if (!isNaN(val)) laborTotal += parseFloat(val);
+          }
+          const equipmentTotal = 1 - laborTotal;
+          compareSheet.getRange(currentRow, col).setValue(equipmentTotal).setNumberFormat('0.0%');
+          col++;
+        }
+      } else if (param.column > 0) {
+        // Regular database columns
+        const paramName = getParameterDisplayName(param.id);
+        compareSheet.getRange(currentRow, 1).setValue(paramName);
+        
+        col = 2;
+        for (const projRow of selectedProjects) {
+          const cellValue = dbSheet.getRange(projRow, param.column).getValue();
+          
+          // Format based on column type
+          if (param.column === 4 || param.column === 5) { // EAC or Budget
+            compareSheet.getRange(currentRow, col).setValue(cellValue / 1000).setNumberFormat('#,##0.0');
+          } else if (param.column === 6) { // Flowrate
+            compareSheet.getRange(currentRow, col).setValue(cellValue).setNumberFormat('#,##0');
+          } else if (param.column >= 10) { // Percentage columns
+            compareSheet.getRange(currentRow, col).setValue(cellValue).setNumberFormat('0.0%');
+          } else {
+            compareSheet.getRange(currentRow, col).setValue(cellValue);
+          }
+          col++;
+        }
+      }
+    }
+    
+    // Auto-resize columns
+    compareSheet.autoResizeColumns(1, col - 1);
+    
+    // Create comparison chart
+    createComparisonChart(compareSheet, selectedProjects, selectedParams, currentRow);
+    
+    // Make sheet active
+    ss.setActiveSheet(compareSheet);
+    SpreadsheetApp.getUi().alert('Comparison complete!');
+  }
+  
+  function getParameterDisplayName(paramId) {
+    const displayNames = {
+      'eac': 'EAC Cost (kEUR)',
+      'budget': 'Budgeted Cost (kEUR)',
+      'variance': 'Cost Variance (kEUR)',
+      'flowrate': 'Flowrate (m³/h)',
+      'technology': 'Technology Type',
+      'tech-details': 'Technology Details',
+      'labor-pct': 'Total Labor %',
+      'equipment-pct': 'Total Equipment %',
+      'membranes-pct': 'Membranes %',
+      'pumps-pct': 'Pumps %'
+    };
+    
+    return displayNames[paramId] || paramId;
+  }
+  
+  function createComparisonChart(sheet, selectedProjects, selectedParams, lastDataRow) {
+    // Check if any numeric parameters are selected
+    const numericParams = selectedParams.filter(p => 
+      p.column > 0 && ![7, 8].includes(p.column) || p.column < 0
+    );
+    
+    if (numericParams.length === 0) return;
+    
+    // Prepare data for chart
+    const chartData = [['Parameter']];
+    
+    // Add project names as headers
+    const dbSheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName('Project Analysis Database');
+    for (const projRow of selectedProjects) {
+      chartData[0].push(dbSheet.getRange(projRow, 2).getValue());
+    }
+    
+    // Add numeric data
+    let dataRowIndex = 7; // Starting from row 7 in comparison sheet
+    for (const param of numericParams) {
+      const row = [sheet.getRange(dataRowIndex, 1).getValue()]; // Parameter name
+      
+      // Get values for each project
+      for (let j = 0; j < selectedProjects.length; j++) {
+        const value = sheet.getRange(dataRowIndex, j + 2).getValue();
+        row.push(isNaN(value) ? 0 : parseFloat(value));
+      }
+      
+      chartData.push(row);
+      dataRowIndex++;
+    }
+    
+    if (chartData.length <= 1) return;
+    
+    // Write chart data to hidden area
+    const chartDataRange = sheet.getRange(lastDataRow + 5, 10, chartData.length, chartData[0].length);
+    chartDataRange.setValues(chartData);
+    
+    // Create chart
+    const chart = sheet.newChart()
+      .setChartType(Charts.ChartType.COLUMN)
+      .addRange(chartDataRange)
+      .setPosition(lastDataRow + 3, 1, 0, 0)
+      .setOption('title', 'Project Comparison')
+      .setOption('width', 600)
+      .setOption('height', 400)
+      .setOption('legend', {position: 'bottom'})
+      .setOption('vAxis', {title: 'Value'})
+      .build();
+    
+    sheet.insertChart(chart);
+  }
+  
+  // Legacy functions for backward compatibility
+  function getParameterSelection(dbSheet) {
+    const ui = SpreadsheetApp.getUi();
+    const lastCol = dbSheet.getLastColumn();
+    
+    let paramList = 'Available parameters:\n\n';
+    
+    // List all available parameters
+    paramList += '1. EAC Cost (kEUR)\n';
+    paramList += '2. Budgeted Cost (kEUR)\n';
+    paramList += '3. Flowrate (m3/h)\n';
+    paramList += '4. Technology Type\n';
+    paramList += '5. Technology Details\n';
+    
+    // Add ratio columns
+    let paramNum = 6;
+    for (let i = 9; i <= lastCol; i++) {
+      const header = dbSheet.getRange(1, i).getValue();
+      paramList += `${paramNum}. ${header}\n`;
+      paramNum++;
+    }
+    
+    paramList += '\nEnter parameter numbers separated by commas:';
+    
+    // Get selections
+    const selection = ui.prompt('Select Parameters to Compare', paramList, ui.ButtonSet.OK_CANCEL);
+    if (selection.getSelectedButton() !== ui.Button.OK) return null;
+    
+    // Parse selections
+    const params = [];
+    const paramNums = selection.getResponseText().split(',');
+    
+    for (const pNum of paramNums) {
+      let colNum;
+      switch (parseInt(pNum.trim())) {
+        case 1: colNum = 4; break;  // EAC Cost
+        case 2: colNum = 5; break;  // Budgeted Cost
+        case 3: colNum = 6; break;  // Flowrate
+        case 4: colNum = 7; break;  // Technology Type
+        case 5: colNum = 8; break;  // Technology Details
+        default:
+          colNum = parseInt(pNum.trim()) + 3;
+      }
+      
+      if (colNum >= 4 && colNum <= lastCol) {
+        params.push(colNum);
+      }
+    }
+    
+    return params.length > 0 ? params : null;
+  }
+  
+  function getAxisTitle(selectedParams) {
+    if (selectedParams.length === 0) return 'Value';
+    
+    const firstParam = selectedParams[0];
+    
+    if (firstParam.column === 4 || firstParam.column === 5 || firstParam.column === -1) {
+      return 'kEUR';
+    } else if (firstParam.column === 6) {
+      return 'm³/h';
+    } else if (firstParam.column >= 10 || firstParam.column < 0) {
+      return 'Percentage (%)';
+    } else {
+      return 'Value';
+    }
+  }

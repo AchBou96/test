@@ -1,0 +1,296 @@
+// ============================================
+// Google Apps Script - Charts Module with Integrated UI
+// ============================================
+
+function createCharts(sheet, mainCatTotalsEAC, mainCatTotalsBudget, categorizedItemsEAC,
+    categorizedItemsBudget, totalEACCost, totalBudgetedCost) {
+
+// Create data ranges for charts
+const chartStartRow = sheet.getLastRow() + 5;
+let chartColumn = 6; // Column F
+
+// 1. Main Category Pie Chart
+if (Object.keys(mainCatTotalsEAC).length > 0) {
+// Prepare data for main category chart
+const mainCatData = [['Category', 'Cost (kEUR)']];
+for (const cat in mainCatTotalsEAC) {
+mainCatData.push([cat, mainCatTotalsEAC[cat] / 1000]);
+}
+
+// Write data to sheet (hidden area)
+const dataRange = sheet.getRange(chartStartRow, 20, mainCatData.length, 2);
+dataRange.setValues(mainCatData);
+
+// Create pie chart
+const pieChart = sheet.newChart()
+.setChartType(Charts.ChartType.PIE)
+.addRange(dataRange)
+.setPosition(8, chartColumn, 0, 0)
+.setOption('title', 'Cost Distribution by Main Category')
+.setOption('width', 350)
+.setOption('height', 250)
+.setOption('pieSliceText', 'percentage')
+.setOption('legend', {position: 'right'})
+.build();
+
+sheet.insertChart(pieChart);
+}
+
+// 2. Interactive Waterfall Chart Option
+const ui = SpreadsheetApp.getUi();
+const response = ui.alert('Waterfall Chart', 
+'Would you like to create an interactive waterfall chart for budget bridge analysis?',
+ui.ButtonSet.YES_NO);
+
+if (response === ui.Button.YES) {
+showWaterfallChartDialog(categorizedItemsEAC, categorizedItemsBudget, 
+           totalEACCost, totalBudgetedCost, mainCatTotalsEAC, mainCatTotalsBudget);
+} else {
+// Create standard column chart
+const waterfallData = prepareBudgetBridgeData(categorizedItemsEAC, categorizedItemsBudget,
+                                 totalEACCost, totalBudgetedCost);
+
+if (waterfallData.length > 0) {
+const waterfallRange = sheet.getRange(chartStartRow + 10, 20, waterfallData.length, 4);
+waterfallRange.setValues(waterfallData);
+
+const waterfallChart = sheet.newChart()
+.setChartType(Charts.ChartType.COLUMN)
+.addRange(waterfallRange)
+.setPosition(44, 7, 0, 0)
+.setOption('title', 'Budget Bridge Analysis by Subcategory (kEUR)')
+.setOption('width', 850)
+.setOption('height', 450)
+.setOption('isStacked', true)
+.setOption('series', {
+0: {color: 'transparent'},
+1: {color: '#FF0000'},
+2: {color: '#00B050'}
+})
+.setOption('legend', {position: 'bottom'})
+.setOption('vAxis', {title: 'kEUR'})
+.setOption('hAxis', {slantedText: true, slantedTextAngle: 45})
+.build();
+
+sheet.insertChart(waterfallChart);
+}
+}
+
+// 3. Labor subcategory pie chart
+const laborData = [['Subcategory', 'Cost (kEUR)']];
+let laborTotal = 0;
+
+for (const catKey in categorizedItemsEAC) {
+if (catKey.includes('LABOR|')) {
+const [, subcat] = catKey.split('|');
+laborData.push([subcat, categorizedItemsEAC[catKey] / 1000]);
+laborTotal += categorizedItemsEAC[catKey];
+}
+}
+
+if (laborData.length > 1) {
+const laborDataRange = sheet.getRange(chartStartRow + 20, 20, laborData.length, 2);
+laborDataRange.setValues(laborData);
+
+const laborChart = sheet.newChart()
+.setChartType(Charts.ChartType.PIE)
+.addRange(laborDataRange)
+.setPosition(8, 12, 0, 0)
+.setOption('title', `Labor Cost Distribution - Total: ${formatNumber(laborTotal/1000, '#,##0.0')} kEUR`)
+.setOption('width', 350)
+.setOption('height', 250)
+.setOption('pieSliceText', 'percentage')
+.setOption('legend', {position: 'right'})
+.build();
+
+sheet.insertChart(laborChart);
+}
+
+// 4. Equipment subcategory pie chart
+const equipData = [['Subcategory', 'Cost (kEUR)']];
+let equipTotal = 0;
+
+for (const catKey in categorizedItemsEAC) {
+if (catKey.includes('EQUIPMENTS|')) {
+const [, subcat] = catKey.split('|');
+equipData.push([subcat, categorizedItemsEAC[catKey] / 1000]);
+equipTotal += categorizedItemsEAC[catKey];
+}
+}
+
+if (equipData.length > 1) {
+const equipDataRange = sheet.getRange(chartStartRow + 30, 20, equipData.length, 2);
+equipDataRange.setValues(equipData);
+
+const equipChart = sheet.newChart()
+.setChartType(Charts.ChartType.PIE)
+.addRange(equipDataRange)
+.setPosition(8, 18, 0, 0)
+.setOption('title', `Equipment Cost Distribution - Total: ${formatNumber(equipTotal/1000, '#,##0.0')} kEUR`)
+.setOption('width', 400)
+.setOption('height', 250)
+.setOption('pieSliceText', 'percentage')
+.setOption('legend', {position: 'right'})
+.setOption('fontSize', 8)
+.build();
+
+sheet.insertChart(equipChart);
+}
+
+// 5. Variance Distribution by Main Category
+const totalProjectVariance = totalEACCost - totalBudgetedCost;
+
+if (Math.abs(totalProjectVariance) > 0) {
+const varianceData = [['Category', 'Contribution %']];
+
+// Calculate variances
+for (const cat in mainCatTotalsEAC) {
+const variance = mainCatTotalsEAC[cat] - (mainCatTotalsBudget[cat] || 0);
+const contribution = Math.abs(variance / totalProjectVariance * 100);
+const label = `${cat} (${variance >= 0 ? '+' : ''}${formatNumber(variance/1000, '#,##0.0')} kEUR)`;
+varianceData.push([label, contribution]);
+}
+
+// Add any budget categories not in EAC
+for (const cat in mainCatTotalsBudget) {
+if (!mainCatTotalsEAC[cat]) {
+const variance = -mainCatTotalsBudget[cat];
+const contribution = Math.abs(variance / totalProjectVariance * 100);
+const label = `${cat} (${formatNumber(variance/1000, '#,##0.0')} kEUR)`;
+varianceData.push([label, contribution]);
+}
+}
+
+if (varianceData.length > 1) {
+const varianceDataRange = sheet.getRange(chartStartRow + 40, 20, varianceData.length, 2);
+varianceDataRange.setValues(varianceData);
+
+const varianceChart = sheet.newChart()
+.setChartType(Charts.ChartType.PIE)
+.addRange(varianceDataRange)
+.setPosition(26, 12, 0, 0)
+.setOption('title', 'Variance Contribution by Main Category')
+.setOption('width', 350)
+.setOption('height', 250)
+.setOption('pieSliceText', 'value')
+.setOption('legend', {position: 'right'})
+.build();
+
+sheet.insertChart(varianceChart);
+}
+}
+}
+
+function prepareBudgetBridgeData(categorizedItemsEAC, categorizedItemsBudget, totalEACCost, totalBudgetedCost) {
+// Prepare data for waterfall chart
+const data = [['Subcategory', 'Base', 'Over Budget', 'Under Budget']];
+
+// Start with budgeted cost
+data.push(['Budgeted Cost (Total)', 0, totalBudgetedCost / 1000, 0]);
+
+// Sort subcategories
+const sortedKeys = [];
+
+// Add LABOR subcategories first
+for (const key in categorizedItemsEAC) {
+if (key.includes('LABOR|')) sortedKeys.push(key);
+}
+
+// Then EQUIPMENT subcategories
+for (const key in categorizedItemsEAC) {
+if (key.includes('EQUIPMENTS|')) sortedKeys.push(key);
+}
+
+// Process subcategories
+let cumulativeValue = totalBudgetedCost / 1000;
+
+for (const catKey of sortedKeys) {
+const [, subcat] = catKey.split('|');
+const subcatEAC = categorizedItemsEAC[catKey] / 1000;
+const subcatBudget = (categorizedItemsBudget[catKey] || 0) / 1000;
+const variance = subcatEAC - subcatBudget;
+
+if (variance >= 0) {
+data.push([subcat, cumulativeValue, variance, 0]);
+} else {
+data.push([subcat, cumulativeValue + variance, 0, Math.abs(variance)]);
+}
+
+cumulativeValue += variance;
+}
+
+// End with EAC cost
+data.push(['EAC Cost (Total)', 0, totalEACCost / 1000, 0]);
+
+return data;
+}
+
+// Show interactive waterfall chart dialog
+function showWaterfallChartDialog(categorizedItemsEAC, categorizedItemsBudget, 
+                totalEACCost, totalBudgetedCost, mainCatTotalsEAC, mainCatTotalsBudget) {
+// Store data in script properties temporarily
+const props = PropertiesService.getScriptProperties();
+props.setProperty('WATERFALL_DATA', JSON.stringify({
+categorizedItemsEAC,
+categorizedItemsBudget,
+totalEACCost,
+totalBudgetedCost,
+mainCatTotalsEAC,
+mainCatTotalsBudget
+}));
+
+const html = HtmlService.createHtmlOutputFromFile('WaterfallChartUI')
+.setWidth(1200)
+.setHeight(800);
+
+SpreadsheetApp.getUi().showModalDialog(html, 'Interactive Budget Bridge Analysis');
+}
+
+// Get waterfall chart data for UI
+function getWaterfallChartData() {
+const props = PropertiesService.getScriptProperties();
+const dataStr = props.getProperty('WATERFALL_DATA');
+
+if (!dataStr) {
+return {
+budget: 5000,
+eac: 5450,
+categories: []
+};
+}
+
+const data = JSON.parse(dataStr);
+
+// Transform data for waterfall chart
+const result = {
+budget: data.totalBudgetedCost / 1000,
+eac: data.totalEACCost / 1000,
+categories: []
+};
+
+// Process main categories
+for (const mainCat in data.mainCatTotalsEAC) {
+const category = {
+name: mainCat,
+budget: (data.mainCatTotalsBudget[mainCat] || 0) / 1000,
+eac: data.mainCatTotalsEAC[mainCat] / 1000,
+subcategories: []
+};
+
+// Process subcategories
+for (const catKey in data.categorizedItemsEAC) {
+if (catKey.startsWith(mainCat + '|')) {
+const [, subcat] = catKey.split('|');
+category.subcategories.push({
+name: subcat,
+budget: (data.categorizedItemsBudget[catKey] || 0) / 1000,
+eac: data.categorizedItemsEAC[catKey] / 1000
+});
+}
+}
+
+result.categories.push(category);
+}
+
+return result;
+}

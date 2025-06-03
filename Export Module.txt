@@ -1,0 +1,736 @@
+// ============================================
+// Google Apps Script - Export Module
+// ============================================
+
+// Export Individual Summaries as Excel
+function exportIndividualSummariesExcel() {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const summarySheets = getSummarySheets();
+  
+  if (summarySheets.length === 0) {
+    SpreadsheetApp.getUi().alert(
+      'No project summary sheets found.\nPlease analyze projects first to create summary sheets.'
+    );
+    return;
+  }
+  
+  // Create a new spreadsheet for export
+  const exportSS = SpreadsheetApp.create(`Project Summaries Export - ${new Date().toLocaleDateString()}`);
+  
+  // Copy each summary sheet to the new spreadsheet
+  summarySheets.forEach((sheet, index) => {
+    const newSheet = sheet.copyTo(exportSS);
+    newSheet.setName(sheet.getName());
+    
+    // Remove the default Sheet1 if this is the first sheet
+    if (index === 0) {
+      const defaultSheet = exportSS.getSheetByName('Sheet1');
+      if (defaultSheet) exportSS.deleteSheet(defaultSheet);
+    }
+  });
+  
+  // Get the URL of the new spreadsheet
+  const url = exportSS.getUrl();
+  
+  // Show success message with link
+  const ui = SpreadsheetApp.getUi();
+  const response = ui.alert('Export Complete',
+    `Successfully exported ${summarySheets.length} summary sheet(s).\n\nWould you like to open the exported file?`,
+    ui.ButtonSet.YES_NO);
+  
+  if (response === ui.Button.YES) {
+    const html = `<script>window.open('${url}', '_blank'); google.script.host.close();</script>`;
+    ui.showModalDialog(HtmlService.createHtmlOutput(html).setHeight(1).setWidth(1), 'Opening...');
+  }
+}
+
+// Export Individual Summaries as PDF
+function exportIndividualSummariesPDF() {
+  const summarySheets = getSummarySheets();
+  
+  if (summarySheets.length === 0) {
+    SpreadsheetApp.getUi().alert(
+      'No project summary sheets found.\nPlease analyze projects first to create summary sheets.'
+    );
+    return;
+  }
+  
+  const ui = SpreadsheetApp.getUi();
+  ui.alert('PDF Export',
+    `Found ${summarySheets.length} summary sheet(s).\n\n` +
+    'Each sheet will be exported as a separate PDF file to your Google Drive.\n\n' +
+    'Click OK to continue.',
+    ui.ButtonSet.OK);
+  
+  // Create folder in Drive
+  const folder = DriveApp.createFolder(`Project Summaries PDFs - ${new Date().toLocaleDateString()}`);
+  
+  // Export each sheet
+  summarySheets.forEach(sheet => {
+    createPDFReport(sheet, folder);
+  });
+  
+  // Show completion message
+  const folderUrl = folder.getUrl();
+  const response = ui.alert('Export Complete',
+    `Successfully exported ${summarySheets.length} PDF file(s) to Google Drive.\n\n` +
+    'Would you like to open the folder?',
+    ui.ButtonSet.YES_NO);
+  
+  if (response === ui.Button.YES) {
+    const html = `<script>window.open('${folderUrl}', '_blank'); google.script.host.close();</script>`;
+    ui.showModalDialog(HtmlService.createHtmlOutput(html).setHeight(1).setWidth(1), 'Opening...');
+  }
+}
+
+// Create PDF Report with hybrid layout
+function createPDFReport(summarySheet, folder) {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const projectName = summarySheet.getRange('C3').getValue();
+  const projectNumber = summarySheet.getRange('C4').getValue();
+  
+  // Create temporary spreadsheet for PDF export
+  const tempSS = SpreadsheetApp.create(`Temp_${projectNumber}`);
+  
+  try {
+    // Create 3 pages
+    const page1 = tempSS.getSheets()[0];
+    page1.setName('Executive Summary');
+    
+    const page2 = tempSS.insertSheet('Detailed Analysis');
+    const page3 = tempSS.insertSheet('Subcategory Analysis');
+    
+    // Page 1 - Executive Summary (Portrait)
+    createExecutiveSummaryPage(page1, summarySheet);
+    
+    // Page 2 - Detailed Analysis (Landscape)
+    createDetailedAnalysisPage(page2, summarySheet);
+    
+    // Page 3 - Subcategory Analysis (Portrait)
+    createSubcategoryAnalysisPage(page3, summarySheet);
+    
+    // Export as PDF
+    const blob = tempSS.getAs('application/pdf');
+    blob.setName(`${projectName.replace(/ Summary$/, '')} - Summary Report.pdf`);
+    folder.createFile(blob);
+    
+  } finally {
+    // Clean up temporary file
+    DriveApp.getFileById(tempSS.getId()).setTrashed(true);
+  }
+}
+
+function createExecutiveSummaryPage(sheet, summarySheet) {
+  // Header
+  sheet.getRange('A1:F1').merge();
+  sheet.getRange('A1').setValue('PROJECT FINANCIAL SUMMARY');
+  sheet.getRange('A1').setFontSize(18).setFontWeight('bold').setHorizontalAlignment('center');
+  
+  // Project Info
+  sheet.getRange('A3').setValue('Project Name:');
+  sheet.getRange('C3').setValue(summarySheet.getRange('C3').getValue());
+  sheet.getRange('A4').setValue('Project Number:');
+  sheet.getRange('C4').setValue(summarySheet.getRange('C4').getValue());
+  sheet.getRange('A5').setValue('Analysis Date:');
+  sheet.getRange('C5').setValue(summarySheet.getRange('C5').getValue());
+  
+  // Key Financial Metrics
+  sheet.getRange('A7').setValue('KEY FINANCIAL METRICS');
+  sheet.getRange('A7').setFontSize(14).setFontWeight('bold');
+  
+  // Extract financial data
+  const lastRow = summarySheet.getLastRow();
+  let eacCost = 0, budgetCost = 0, variance = 0, variancePercent = 0;
+  
+  for (let i = 1; i <= lastRow; i++) {
+    const cellA = summarySheet.getRange(i, 1).getValue().toString();
+    
+    if (cellA.includes('EAC Cost (kEUR)')) {
+      eacCost = summarySheet.getRange(i, 3).getValue();
+    } else if (cellA.includes('Budgeted Cost (kEUR)')) {
+      budgetCost = summarySheet.getRange(i, 3).getValue();
+    } else if (cellA.includes('Variance (kEUR)')) {
+      variance = summarySheet.getRange(i, 3).getValue();
+    } else if (cellA.includes('Variance %')) {
+      variancePercent = summarySheet.getRange(i, 3).getValue();
+    }
+  }
+  
+  // Display metrics
+  sheet.getRange('A9').setValue('EAC Cost:');
+  sheet.getRange('C9').setValue(eacCost).setNumberFormat('#,##0.0 "kEUR"');
+  
+  sheet.getRange('A10').setValue('Budget:');
+  sheet.getRange('C10').setValue(budgetCost).setNumberFormat('#,##0.0 "kEUR"');
+  
+  sheet.getRange('A11').setValue('Variance:');
+  sheet.getRange('C11').setValue(variance).setNumberFormat('#,##0.0 "kEUR"');
+  if (variance > 0) {
+    sheet.getRange('C11').setFontColor('#FF0000');
+  } else {
+    sheet.getRange('C11').setFontColor('#008000');
+  }
+  
+  sheet.getRange('A12').setValue('Variance %:');
+  sheet.getRange('C12').setValue(variancePercent).setNumberFormat('0.0%');
+  
+  // Budget Bridge Summary
+  let bridgeRow = 15;
+  sheet.getRange(`A${bridgeRow}`).setValue('BUDGET BRIDGE SUMMARY');
+  sheet.getRange(`A${bridgeRow}`).setFontSize(12).setFontWeight('bold');
+  
+  // Extract main category variances
+  for (let i = 1; i <= lastRow; i++) {
+    const cellA = summarySheet.getRange(i, 1).getValue().toString();
+    const isBold = summarySheet.getRange(i, 1).getFontWeight() === 'bold';
+    
+    if (isBold && (cellA === 'LABOR' || cellA === 'EQUIPMENTS')) {
+      bridgeRow++;
+      sheet.getRange(bridgeRow, 1).setValue(cellA);
+      sheet.getRange(bridgeRow, 2).setValue('Variance:');
+      const varianceValue = summarySheet.getRange(i, 5).getValue();
+      sheet.getRange(bridgeRow, 3).setValue(varianceValue).setNumberFormat('#,##0.0 "kEUR"');
+      
+      if (varianceValue < 0) {
+        sheet.getRange(bridgeRow, 3).setFontColor('#FF0000');
+      } else {
+        sheet.getRange(bridgeRow, 3).setFontColor('#008000');
+      }
+    }
+  }
+  
+  // Set column widths
+  sheet.setColumnWidths(1, 6, 120);
+}
+
+function createDetailedAnalysisPage(sheet, summarySheet) {
+  // Header
+  sheet.getRange('A1:H1').merge();
+  sheet.getRange('A1').setValue('DETAILED COST BREAKDOWN');
+  sheet.getRange('A1').setFontSize(16).setFontWeight('bold').setHorizontalAlignment('center');
+  
+  // Find and copy cost breakdown table
+  const lastRow = summarySheet.getLastRow();
+  let tableStartRow = 0, tableEndRow = 0;
+  
+  for (let i = 1; i <= lastRow; i++) {
+    const cellA = summarySheet.getRange(i, 1).getValue().toString();
+    
+    if (cellA === 'Main Category') {
+      tableStartRow = i;
+    } else if (cellA === 'TOTAL' && summarySheet.getRange(i, 1).getFontWeight() === 'bold') {
+      tableEndRow = i;
+      break;
+    }
+  }
+  
+  if (tableStartRow > 0 && tableEndRow > 0) {
+    const tableHeight = tableEndRow - tableStartRow + 1;
+    const tableData = summarySheet.getRange(tableStartRow, 1, tableHeight, 5).getValues();
+    const tableFormats = summarySheet.getRange(tableStartRow, 1, tableHeight, 5).getNumberFormats();
+    const tableFontWeights = summarySheet.getRange(tableStartRow, 1, tableHeight, 5).getFontWeights();
+    const tableFontColors = summarySheet.getRange(tableStartRow, 1, tableHeight, 5).getFontColors();
+    
+    sheet.getRange(3, 1, tableHeight, 5).setValues(tableData);
+    sheet.getRange(3, 1, tableHeight, 5).setNumberFormats(tableFormats);
+    sheet.getRange(3, 1, tableHeight, 5).setFontWeights(tableFontWeights);
+    sheet.getRange(3, 1, tableHeight, 5).setFontColors(tableFontColors);
+  }
+  
+  sheet.autoResizeColumns(1, 5);
+}
+
+function createSubcategoryAnalysisPage(sheet, summarySheet) {
+  // Header
+  sheet.getRange('A1:F1').merge();
+  sheet.getRange('A1').setValue('SUBCATEGORY ANALYSIS');
+  sheet.getRange('A1').setFontSize(16).setFontWeight('bold').setHorizontalAlignment('center');
+  
+  // Note about charts
+  sheet.getRange('A3').setValue('Note: Charts from the original summary are not included in PDF exports.');
+  sheet.getRange('A3').setFontStyle('italic');
+  
+  // Create subcategory tables instead
+  let currentRow = 5;
+  
+  // Labor subcategories table
+  sheet.getRange(`A${currentRow}`).setValue('LABOR SUBCATEGORIES');
+  sheet.getRange(`A${currentRow}`).setFontWeight('bold');
+  currentRow++;
+  
+  sheet.getRange(`A${currentRow}`).setValue('Subcategory');
+  sheet.getRange(`B${currentRow}`).setValue('Cost (kEUR)');
+  sheet.getRange(`C${currentRow}`).setValue('% of Total');
+  sheet.getRange(`A${currentRow}:C${currentRow}`).setFontWeight('bold').setBackground('#C8C8C8');
+  
+  // Equipment subcategories table  
+  currentRow += 10; // Leave space
+  sheet.getRange(`A${currentRow}`).setValue('EQUIPMENT SUBCATEGORIES');
+  sheet.getRange(`A${currentRow}`).setFontWeight('bold');
+  currentRow++;
+  
+  sheet.getRange(`A${currentRow}`).setValue('Subcategory');
+  sheet.getRange(`B${currentRow}`).setValue('Cost (kEUR)');
+  sheet.getRange(`C${currentRow}`).setValue('% of Total');
+  sheet.getRange(`A${currentRow}:C${currentRow}`).setFontWeight('bold').setBackground('#C8C8C8');
+}
+
+// Get all summary sheets
+function getSummarySheets() {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const sheets = ss.getSheets();
+  
+  return sheets.filter(sheet => sheet.getName().endsWith(' Summary'));
+}
+
+// Create Portfolio Report
+function createPortfolioReport() {
+  const summarySheets = getSummarySheets();
+  
+  if (summarySheets.length === 0) {
+    SpreadsheetApp.getUi().alert(
+      'No project summary sheets found.\nPlease analyze projects first.'
+    );
+    return;
+  }
+  
+  const portfolioSheet = createOrClearSheet('Portfolio Report');
+  const projectData = [];
+  
+  // Collect data from all summaries
+  summarySheets.forEach(sheet => {
+    const data = extractProjectData(sheet);
+    if (data) projectData.push(data);
+  });
+  
+  // Create portfolio report
+  createPortfolioReportContent(portfolioSheet, projectData);
+  
+  SpreadsheetApp.getUi().alert('Portfolio report created successfully!');
+}
+
+// Extract project data from summary sheet
+function extractProjectData(summarySheet) {
+  const projectData = {
+    projectName: summarySheet.getRange('C3').getValue(),
+    projectNumber: summarySheet.getRange('C4').getValue()
+  };
+  
+  const lastRow = summarySheet.getLastRow();
+  
+  for (let i = 1; i <= lastRow; i++) {
+    const cellA = summarySheet.getRange(i, 1).getValue().toString();
+    
+    if (cellA.includes('EAC Cost (kEUR)')) {
+      projectData.eacCost = parseFloat(summarySheet.getRange(i, 3).getValue());
+    } else if (cellA.includes('Budgeted Cost (kEUR)')) {
+      projectData.budgetCost = parseFloat(summarySheet.getRange(i, 3).getValue());
+    } else if (cellA === 'LABOR' && summarySheet.getRange(i, 1).getFontWeight() === 'bold') {
+      projectData.laborPercent = summarySheet.getRange(i, 4).getValue();
+    } else if (cellA === 'EQUIPMENTS' && summarySheet.getRange(i, 1).getFontWeight() === 'bold') {
+      projectData.equipmentPercent = summarySheet.getRange(i, 4).getValue();
+    }
+  }
+  
+  // Calculate variance
+  if (projectData.eacCost !== undefined && projectData.budgetCost !== undefined) {
+    projectData.variance = projectData.budgetCost - projectData.eacCost;
+    projectData.variancePercent = projectData.budgetCost !== 0 ? 
+      (projectData.eacCost - projectData.budgetCost) / projectData.budgetCost : 0;
+  }
+  
+  return projectData;
+}
+
+// Create portfolio report content
+function createPortfolioReportContent(sheet, projectData) {
+  // Header
+  sheet.getRange('A1:L1').merge();
+  sheet.getRange('A1').setValue('PROJECT PORTFOLIO REPORT');
+  sheet.getRange('A1').setFontSize(18).setFontWeight('bold').setHorizontalAlignment('center');
+  sheet.getRange('A1:L1').setBackground('#4f81bd').setFontColor('#FFFFFF');
+  
+  sheet.getRange('A3').setValue('Report Date:');
+  sheet.getRange('B3').setValue(new Date().toLocaleDateString());
+  sheet.getRange('A4').setValue('Total Projects:');
+  sheet.getRange('B4').setValue(projectData.length);
+  
+  // Summary table
+  let currentRow = 7;
+  const headers = [
+    'Project Name', 'Project Number', 'EAC Cost (kEUR)', 'Budget (kEUR)',
+    'Variance (kEUR)', 'Variance %', 'Labor %', 'Equipment %', 'Status'
+  ];
+  
+  sheet.getRange(currentRow, 1, 1, headers.length).setValues([headers]);
+  sheet.getRange(currentRow, 1, 1, headers.length).setFontWeight('bold').setBackground('#C8C8C8');
+  
+  // Add project data
+  let totalEAC = 0, totalBudget = 0;
+  
+  projectData.forEach(proj => {
+    currentRow++;
+    
+    const status = proj.variance < 0 ? 'Over Budget' : 'On/Under Budget';
+    const rowData = [
+      proj.projectName,
+      proj.projectNumber,
+      proj.eacCost,
+      proj.budgetCost,
+      proj.variance,
+      proj.variancePercent,
+      proj.laborPercent,
+      proj.equipmentPercent,
+      status
+    ];
+    
+    sheet.getRange(currentRow, 1, 1, rowData.length).setValues([rowData]);
+    
+    // Format
+    sheet.getRange(currentRow, 3, 1, 3).setNumberFormat('#,##0.0');
+    sheet.getRange(currentRow, 6).setNumberFormat('0.0%');
+    sheet.getRange(currentRow, 7, 1, 2).setNumberFormat('0.0%');
+    
+    // Color status
+    if (proj.variance < 0) {
+      sheet.getRange(currentRow, 9).setFontColor('#FF0000');
+    } else {
+      sheet.getRange(currentRow, 9).setFontColor('#008000');
+    }
+    
+    totalEAC += proj.eacCost || 0;
+    totalBudget += proj.budgetCost || 0;
+  });
+  
+  // Total row
+  currentRow += 2;
+  sheet.getRange(currentRow, 1).setValue('PORTFOLIO TOTAL').setFontWeight('bold');
+  sheet.getRange(currentRow, 3).setValue(totalEAC).setNumberFormat('#,##0.0').setFontWeight('bold');
+  sheet.getRange(currentRow, 4).setValue(totalBudget).setNumberFormat('#,##0.0').setFontWeight('bold');
+  sheet.getRange(currentRow, 5).setValue(totalBudget - totalEAC).setNumberFormat('#,##0.0').setFontWeight('bold');
+  
+  if (totalBudget > 0) {
+    sheet.getRange(currentRow, 6).setValue((totalEAC - totalBudget) / totalBudget)
+      .setNumberFormat('0.0%').setFontWeight('bold');
+  }
+  
+  // Add borders
+  sheet.getRange(7, 1, currentRow - 6, 9).setBorder(true, true, true, true, true, true);
+  
+  // Auto-resize columns
+  sheet.autoResizeColumns(1, 9);
+}
+
+// Create Executive Dashboard
+function createExecutiveDashboard() {
+  const summarySheets = getSummarySheets();
+  
+  if (summarySheets.length === 0) {
+    SpreadsheetApp.getUi().alert(
+      'No project summary sheets found.\nPlease analyze projects first.'
+    );
+    return;
+  }
+  
+  const dashboardSheet = createOrClearSheet('Executive Dashboard');
+  const projectData = [];
+  
+  // Collect data
+  summarySheets.forEach(sheet => {
+    const data = extractProjectData(sheet);
+    if (data) projectData.push(data);
+  });
+  
+  // Calculate metrics
+  const metrics = {
+    totalProjects: projectData.length,
+    totalEAC: 0,
+    totalBudget: 0,
+    overBudgetCount: 0,
+    underBudgetCount: 0,
+    largestVariance: 0,
+    largestProject: ''
+  };
+  
+  projectData.forEach(proj => {
+    metrics.totalEAC += proj.eacCost || 0;
+    metrics.totalBudget += proj.budgetCost || 0;
+    
+    if (proj.variance < 0) {
+      metrics.overBudgetCount++;
+    } else {
+      metrics.underBudgetCount++;
+    }
+    
+    if (Math.abs(proj.variance) > Math.abs(metrics.largestVariance)) {
+      metrics.largestVariance = proj.variance;
+      metrics.largestProject = proj.projectName;
+    }
+  });
+  
+  // Create dashboard
+  createDashboardContent(dashboardSheet, metrics, projectData);
+  
+  SpreadsheetApp.getUi().alert('Executive dashboard created successfully!');
+}
+
+// Create dashboard content
+function createDashboardContent(sheet, metrics, projectData) {
+  // Title
+  sheet.getRange('A1:H1').merge();
+  sheet.getRange('A1').setValue('EXECUTIVE DASHBOARD');
+  sheet.getRange('A1').setFontSize(20).setFontWeight('bold').setHorizontalAlignment('center');
+  sheet.getRange('A1:H1').setBackground('#002060').setFontColor('#FFFFFF');
+  
+  // Key Metrics Boxes
+  createMetricBox(sheet, 'B3', 'Total Projects', metrics.totalProjects, '');
+  createMetricBox(sheet, 'D3', 'Total Portfolio Value', metrics.totalEAC, 'kEUR');
+  createMetricBox(sheet, 'F3', 'Total Budget', metrics.totalBudget, 'kEUR');
+  
+  createMetricBox(sheet, 'B6', 'Over Budget', metrics.overBudgetCount, 'projects');
+  createMetricBox(sheet, 'D6', 'On/Under Budget', metrics.underBudgetCount, 'projects');
+  createMetricBox(sheet, 'F6', 'Overall Variance', 
+                 metrics.totalBudget - metrics.totalEAC, 'kEUR');
+  
+  // Project Status Summary
+  let currentRow = 10;
+  sheet.getRange(`A${currentRow}`).setValue('PROJECT STATUS SUMMARY');
+  sheet.getRange(`A${currentRow}`).setFontSize(14).setFontWeight('bold');
+  
+  currentRow += 2;
+  
+  // Status table
+  const statusHeaders = ['Status', 'Count', '% of Portfolio'];
+  sheet.getRange(currentRow, 1, 1, statusHeaders.length).setValues([statusHeaders]);
+  sheet.getRange(currentRow, 1, 1, statusHeaders.length).setFontWeight('bold').setBackground('#C8C8C8');
+  
+  currentRow++;
+  sheet.getRange(currentRow, 1).setValue('Over Budget');
+  sheet.getRange(currentRow, 2).setValue(metrics.overBudgetCount);
+  sheet.getRange(currentRow, 3).setValue(metrics.overBudgetCount / metrics.totalProjects)
+    .setNumberFormat('0.0%');
+  
+  currentRow++;
+  sheet.getRange(currentRow, 1).setValue('On/Under Budget');
+  sheet.getRange(currentRow, 2).setValue(metrics.underBudgetCount);
+  sheet.getRange(currentRow, 3).setValue(metrics.underBudgetCount / metrics.totalProjects)
+    .setNumberFormat('0.0%');
+  
+  // Risk Alert
+  if (metrics.largestVariance < -100) {
+    currentRow += 3;
+    sheet.getRange(`A${currentRow}:D${currentRow}`).merge();
+    sheet.getRange(`A${currentRow}`).setValue(
+      `⚠ ALERT: ${metrics.largestProject} is ${Math.abs(metrics.largestVariance).toFixed(0)} kEUR over budget!`
+    );
+    sheet.getRange(`A${currentRow}`).setFontColor('#FF0000').setFontWeight('bold').setFontSize(12);
+  }
+  
+  sheet.autoResizeColumns(1, 8);
+}
+
+// Create metric box
+function createMetricBox(sheet, cellAddress, title, value, unit) {
+  const row = sheet.getRange(cellAddress).getRow();
+  const col = sheet.getRange(cellAddress).getColumn();
+  
+  // Create box (2x2 cells)
+  const boxRange = sheet.getRange(row, col, 2, 2);
+  boxRange.merge();
+  boxRange.setBorder(true, true, true, true, false, false, '#4f81bd', SpreadsheetApp.BorderStyle.SOLID_THICK);
+  boxRange.setBackground('#f0f8ff');
+  
+  // Title
+  sheet.getRange(row, col).setValue(title);
+  sheet.getRange(row, col).setFontSize(10).setFontWeight('bold');
+  
+  // Value (in merged cell, so we need to set it again)
+  let displayValue;
+  if (unit === 'kEUR') {
+    displayValue = formatNumber(value, '#,##0') + ' kEUR';
+  } else if (unit === 'projects') {
+    displayValue = value + ' ' + unit;
+  } else {
+    displayValue = value;
+  }
+  
+  const valueText = title + '\n' + displayValue;
+  boxRange.setValue(valueText);
+  boxRange.setVerticalAlignment('middle');
+  boxRange.setHorizontalAlignment('center');
+  boxRange.setWrap(true);
+  
+  // Color code if variance
+  if (title.includes('Variance')) {
+    if (value < 0) {
+      boxRange.setFontColor('#FF0000');
+    } else {
+      boxRange.setFontColor('#008000');
+    }
+  }
+}
+
+// Export Key Metrics Table
+function exportKeyMetricsTable() {
+  const summarySheets = getSummarySheets();
+  
+  if (summarySheets.length === 0) {
+    SpreadsheetApp.getUi().alert(
+      'No project summary sheets found.\nPlease analyze projects first.'
+    );
+    return;
+  }
+  
+  const metricsSheet = createOrClearSheet('Key Metrics Export');
+  
+  // Header
+  metricsSheet.getRange('A1:J1').merge();
+  metricsSheet.getRange('A1').setValue('KEY METRICS EXPORT');
+  metricsSheet.getRange('A1').setFontSize(16).setFontWeight('bold').setHorizontalAlignment('center');
+  
+  // Table headers
+  let currentRow = 3;
+  const headers = [
+    'Project Number', 'Project Name', 'EAC (kEUR)', 'Budget (kEUR)',
+    'Variance (kEUR)', 'Variance %', 'Labor %', 'Equipment %',
+    'Analysis Date', 'Status'
+  ];
+  
+  metricsSheet.getRange(currentRow, 1, 1, headers.length).setValues([headers]);
+  metricsSheet.getRange(currentRow, 1, 1, headers.length).setFontWeight('bold').setBackground('#C8C8C8');
+  
+  // Add data
+  summarySheets.forEach(summarySheet => {
+    const projData = extractProjectData(summarySheet);
+    if (projData) {
+      currentRow++;
+      
+      const status = projData.variance < 0 ? 'Over Budget' : 'On/Under Budget';
+      const analysisDate = summarySheet.getRange('C5').getValue();
+      
+      const rowData = [
+        projData.projectNumber,
+        projData.projectName,
+        projData.eacCost,
+        projData.budgetCost,
+        projData.variance,
+        projData.variancePercent,
+        projData.laborPercent,
+        projData.equipmentPercent,
+        analysisDate,
+        status
+      ];
+      
+      metricsSheet.getRange(currentRow, 1, 1, rowData.length).setValues([rowData]);
+      
+      // Format
+      metricsSheet.getRange(currentRow, 3, 1, 3).setNumberFormat('#,##0.0');
+      metricsSheet.getRange(currentRow, 6).setNumberFormat('0.0%');
+      metricsSheet.getRange(currentRow, 7, 1, 2).setNumberFormat('0.0%');
+      
+      // Color status
+      if (projData.variance < 0) {
+        metricsSheet.getRange(currentRow, 10).setFontColor('#FF0000');
+      } else {
+        metricsSheet.getRange(currentRow, 10).setFontColor('#008000');
+      }
+    }
+  });
+  
+  // Add borders
+  metricsSheet.getRange(3, 1, currentRow - 2, 10).setBorder(true, true, true, true, true, true);
+  
+  // Auto-resize columns
+  metricsSheet.autoResizeColumns(1, 10);
+  
+  // Ask about CSV export
+  const ui = SpreadsheetApp.getUi();
+  const response = ui.alert('Export to CSV?',
+    'Key metrics table created.\n\nDo you want to download this as a CSV file?',
+    ui.ButtonSet.YES_NO);
+  
+  if (response === ui.Button.YES) {
+    exportSheetAsCSV(metricsSheet);
+  }
+}
+
+// Export sheet as CSV
+function exportSheetAsCSV(sheet) {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const url = `https://docs.google.com/spreadsheets/d/${ss.getId()}/export?format=csv&gid=${sheet.getSheetId()}`;
+  
+  const html = `
+    <script>
+      window.open('${url}', '_blank');
+      google.script.host.close();
+    </script>
+  `;
+  
+  SpreadsheetApp.getUi().showModalDialog(
+    HtmlService.createHtmlOutput(html).setHeight(1).setWidth(1),
+    'Downloading CSV...'
+  );
+}
+
+// Custom Selection Export
+function customSelectionExport() {
+  const summarySheets = getSummarySheets();
+  
+  if (summarySheets.length === 0) {
+    SpreadsheetApp.getUi().alert(
+      'No project summary sheets found.\nPlease analyze projects first.'
+    );
+    return;
+  }
+  
+  let sheetList = 'Select sheets to export (enter numbers separated by commas):\n\n';
+  
+  summarySheets.forEach((sheet, index) => {
+    sheetList += `${index + 1}. ${sheet.getName().replace(' Summary', '')}\n`;
+  });
+  
+  const ui = SpreadsheetApp.getUi();
+  const response = ui.prompt('Custom Selection', sheetList, ui.ButtonSet.OK_CANCEL);
+  
+  if (response.getSelectedButton() !== ui.Button.OK) return;
+  
+  // Parse selection
+  const selectedSheets = [];
+  const nums = response.getResponseText().split(',');
+  
+  nums.forEach(num => {
+    const idx = parseInt(num.trim()) - 1;
+    if (idx >= 0 && idx < summarySheets.length) {
+      selectedSheets.push(summarySheets[idx]);
+    }
+  });
+  
+  if (selectedSheets.length === 0) {
+    ui.alert('No valid sheets selected.');
+    return;
+  }
+  
+  // Export selected sheets
+  const exportSS = SpreadsheetApp.create(`Selected Summaries Export - ${new Date().toLocaleDateString()}`);
+  
+  selectedSheets.forEach((sheet, index) => {
+    const newSheet = sheet.copyTo(exportSS);
+    newSheet.setName(sheet.getName());
+    
+    if (index === 0) {
+      const defaultSheet = exportSS.getSheetByName('Sheet1');
+      if (defaultSheet) exportSS.deleteSheet(defaultSheet);
+    }
+  });
+  
+  const url = exportSS.getUrl();
+  
+  const result = ui.alert('Export Complete',
+    `Successfully exported ${selectedSheets.length} selected sheet(s).\n\nWould you like to open the exported file?`,
+    ui.ButtonSet.YES_NO);
+  
+  if (result === ui.Button.YES) {
+    const html = `<script>window.open('${url}', '_blank'); google.script.host.close();</script>`;
+    ui.showModalDialog(HtmlService.createHtmlOutput(html).setHeight(1).setWidth(1), 'Opening...');
+  }
+}
