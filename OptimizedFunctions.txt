@@ -1,0 +1,466 @@
+/**
+ * OptimizedFunctions.gs
+ * Optimized versions of existing functions using BatchService
+ * These override the original functions transparently
+ */
+
+// Store references to original functions
+const OriginalFunctions = {
+  getProjectsForSelection: typeof getProjectsForSelection !== 'undefined' ? getProjectsForSelection : null,
+  getConfig: typeof getConfig !== 'undefined' ? getConfig : null,
+  getCellValue: typeof getCellValue !== 'undefined' ? getCellValue : null,
+  setCellValue: typeof setCellValue !== 'undefined' ? setCellValue : null,
+  analyzeProject: typeof analyzeProject !== 'undefined' ? analyzeProject : null,
+  processCategorization: typeof processCategorization !== 'undefined' ? processCategorization : null,
+  extractAndSaveData: typeof extractAndSaveData !== 'undefined' ? extractAndSaveData : null,
+  executeQueryFromDialog: typeof executeQueryFromDialog !== 'undefined' ? executeQueryFromDialog : null,
+  onOpen: typeof onOpen !== 'undefined' ? onOpen : null
+};
+
+// Override getProjectsForSelection with optimized version
+if (OriginalFunctions.getProjectsForSelection) {
+  getProjectsForSelection = function() {
+    const batchService = BatchService.getInstance();
+    
+    if (!batchService.isEnabled) {
+      return OriginalFunctions.getProjectsForSelection();
+    }
+    
+    const start = Date.now();
+    
+    try {
+      // Get configuration (will be cached)
+      const config = getConfig();
+      if (!config) {
+        throw new Error('Configuration not found');
+      }
+      
+      const ss = SpreadsheetApp.getActiveSpreadsheet();
+      const sourceSheet = ss.getSheetByName(config.SourceSheet);
+      
+      if (!sourceSheet) {
+        throw new Error('Source worksheet not found');
+      }
+      
+      const lastRow = sourceSheet.getLastRow();
+      const lastCol = sourceSheet.getLastColumn();
+      
+      if (lastRow < 2) {
+        return [];
+      }
+      
+      // Check cache
+      const cacheKey = batchService.getCacheKey('projectList', config.SourceSheet, lastRow);
+      const cached = batchService.getFromCache(cacheKey, batchService.cacheConfig.projectListTTL);
+      
+      if (cached) {
+        batchService.log('Using cached project list');
+        return cached;
+      }
+      
+      // Calculate required columns
+      const cols = {
+        projNum: letterToColumn(config.ProjectNumber) - 1,
+        projName: letterToColumn(config.ProjectName) - 1,
+        currency: letterToColumn(config.Currency) - 1
+      };
+      
+      const maxCol = Math.max(cols.projNum, cols.projName, cols.currency) + 1;
+      
+      // Single batch read
+      const allData = sourceSheet.getRange(2, 1, lastRow - 1, maxCol).getValues();
+      
+      // Process data
+      const projectMap = new Map();
+      
+      for (let i = 0; i < allData.length; i++) {
+        const projNum = String(allData[i][cols.projNum] || '').trim();
+        
+        if (projNum) {
+          if (projectMap.has(projNum)) {
+            projectMap.get(projNum).itemCount++;
+          } else {
+            projectMap.set(projNum, {
+              projectNumber: projNum,
+              projectName: String(allData[i][cols.projName] || '').trim(),
+              currency: String(allData[i][cols.currency] || '').trim(),
+              itemCount: 1,
+              firstRow: i + 2
+            });
+          }
+        }
+      }
+      
+      const result = Array.from(projectMap.values());
+      
+      // Cache result
+      batchService.setCache(cacheKey, result);
+      
+      // Track performance
+      batchService.trackPerformance('getProjectsForSelection', Date.now() - start);
+      
+      return result;
+      
+    } catch (error) {
+      console.error('[BatchService] getProjectsForSelection optimization failed:', error);
+      // Fallback to original
+      return OriginalFunctions.getProjectsForSelection();
+    }
+  };
+}
+
+// Override getConfig with cached version
+if (OriginalFunctions.getConfig) {
+  getConfig = function() {
+    const batchService = BatchService.getInstance();
+    
+    if (!batchService.isEnabled) {
+      return OriginalFunctions.getConfig();
+    }
+    
+    // Check cache
+    if (batchService.configCache && 
+        (Date.now() - batchService.configCache.timestamp < batchService.cacheConfig.configTTL)) {
+      return batchService.configCache.data;
+    }
+    
+    // Get from original function
+    const config = OriginalFunctions.getConfig();
+    
+    // Cache it
+    batchService.configCache = {
+      data: config,
+      timestamp: Date.now()
+    };
+    
+    return config;
+  };
+}
+
+// Override getCellValue with cached reads
+if (OriginalFunctions.getCellValue) {
+  getCellValue = function(sheet, row, columnLetter) {
+    const batchService = BatchService.getInstance();
+    
+    if (!batchService.isEnabled) {
+      return OriginalFunctions.getCellValue(sheet, row, columnLetter);
+    }
+    
+    try {
+      // Get cached sheet data
+      const sheetData = batchService.getSheetCache(sheet);
+      if (sheetData && sheetData[row - 1]) {
+        const col = letterToColumn(columnLetter) - 1;
+        if (col >= 0 && col < sheetData[row - 1].length) {
+          return sheetData[row - 1][col];
+        }
+      }
+    } catch (error) {
+      batchService.log('getCellValue cache miss', error);
+    }
+    
+    // Fallback to original
+    return OriginalFunctions.getCellValue(sheet, row, columnLetter);
+  };
+}
+
+// Override setCellValue with batch writes
+if (OriginalFunctions.setCellValue) {
+  setCellValue = function(sheet, row, columnLetter, value) {
+    const batchService = BatchService.getInstance();
+    
+    if (!batchService.isEnabled) {
+      return OriginalFunctions.setCellValue(sheet, row, columnLetter, value);
+    }
+    
+    // Queue the write
+    batchService.queueWrite(sheet, row, columnLetter, value);
+    
+    // Update cache immediately for consistency
+    const sheetData = batchService.getSheetCache(sheet);
+    if (sheetData && sheetData[row - 1]) {
+      const col = letterToColumn(columnLetter) - 1;
+      if (col >= 0) {
+        sheetData[row - 1][col] = value;
+      }
+    }
+  };
+}
+
+// Override extractAndSaveData for batch database operations
+if (OriginalFunctions.extractAndSaveData) {
+  extractAndSaveData = function(summarySheet, dbSheet, rowNum, formData) {
+    const batchService = BatchService.getInstance();
+    
+    if (!batchService.isEnabled) {
+      return OriginalFunctions.extractAndSaveData(summarySheet, dbSheet, rowNum, formData);
+    }
+    
+    const start = Date.now();
+    
+    try {
+      // Read all summary data at once
+      const lastRow = summarySheet.getLastRow();
+      const lastCol = summarySheet.getLastColumn();
+      const summaryData = summarySheet.getRange(1, 1, lastRow, lastCol).getValues();
+      
+      // Prepare row data
+      const rowData = new Array(35).fill(''); // Database has 35 columns
+      
+      // Extract project info
+      rowData[0] = summaryData[3][2]; // Project Number (C4)
+      rowData[1] = summaryData[2][2]; // Project Name (C3)
+      rowData[2] = formData.scope;
+      rowData[5] = parseFloat(formData.flowrate);
+      rowData[6] = formData.technology;
+      rowData[8] = formData.market;
+      
+      // Extract financial data
+      for (let i = 0; i < summaryData.length; i++) {
+        const cellA = String(summaryData[i][0]);
+        
+        if (cellA.includes('EAC Cost (kEUR)')) {
+          rowData[3] = parseFloat(summaryData[i][2]) * 1000;
+        } else if (cellA.includes('Budgeted Cost (kEUR)')) {
+          rowData[4] = parseFloat(summaryData[i][2]) * 1000;
+        }
+      }
+      
+      // Extract technology details
+      let techDetails = '';
+      if (formData.techDetails) {
+        switch (formData.technology) {
+          case 'MBR':
+            techDetails = `Cassettes: ${formData.techDetails.cassettes || 0}`;
+            break;
+          case 'RO':
+            techDetails = `Skids: ${formData.techDetails.skids || 0}`;
+            break;
+          case 'UF':
+            techDetails = `Skids: ${formData.techDetails.skids || 0}`;
+            break;
+          case 'EDR':
+            techDetails = `Stacks: ${formData.techDetails.stacks || 0}`;
+            break;
+          case 'Complex':
+            techDetails = formData.techDetails.technologies || '';
+            break;
+        }
+      }
+      rowData[7] = techDetails;
+      
+      // Extract percentages
+      const percentageHeaders = {
+        'PM Labor': 9,
+        'ENG Labor': 10,
+        'Sourcing Labor': 11,
+        'Commissioning': 12,
+        'Membranes': 13,
+        'Tanks': 14,
+        'Chemical Dosing': 15,
+        'Valves and Instruments': 16,
+        'Skids': 17,
+        'Piping': 18,
+        'Control Material': 19,
+        'Electrical': 20,
+        'Post Ship/Spare Parts': 21,
+        'Freight': 22,
+        'Unallocated Costs': 23,
+        'Pumps': 24,
+        'Electrical and Software': 25,
+        'E&M Installation': 26,
+        'Blowers': 27,
+        'Third Party': 28,
+        'IX Resin': 29,
+        'Prefab': 30,
+        'RISK': 31,
+        'Mixers': 32,
+        'Diffusers': 33
+      };
+      
+      // Process percentages
+      for (let i = 0; i < summaryData.length; i++) {
+        const cellB = String(summaryData[i][1]).trim();
+        
+        if (cellB) {
+          for (const [subcategory, colIndex] of Object.entries(percentageHeaders)) {
+            if (cellB.includes(subcategory)) {
+              const percentage = summaryData[i][3];
+              if (percentage !== '') {
+                rowData[colIndex] = percentage;
+              }
+              break;
+            }
+          }
+        }
+      }
+      
+      // Single batch write
+      dbSheet.getRange(rowNum, 1, 1, rowData.length).setValues([rowData]);
+      
+      // Apply formatting
+      dbSheet.getRange(rowNum, 4, 1, 2).setNumberFormat('#,##0');
+      dbSheet.getRange(rowNum, 6).setNumberFormat('#,##0');
+      dbSheet.getRange(rowNum, 10, 1, 25).setNumberFormat('0.0%');
+      
+      // Force flush to ensure data is written
+      batchService.forceFlush();
+      
+      batchService.trackPerformance('extractAndSaveData', Date.now() - start);
+      
+    } catch (error) {
+      console.error('[BatchService] extractAndSaveData optimization failed:', error);
+      // Fallback to original
+      return OriginalFunctions.extractAndSaveData(summarySheet, dbSheet, rowNum, formData);
+    }
+  };
+}
+
+// Override executeQueryFromDialog for batch query operations
+if (OriginalFunctions.executeQueryFromDialog) {
+  executeQueryFromDialog = function(conditions) {
+    const batchService = BatchService.getInstance();
+    
+    if (!batchService.isEnabled) {
+      return OriginalFunctions.executeQueryFromDialog(conditions);
+    }
+    
+    const start = Date.now();
+    
+    try {
+      const ss = SpreadsheetApp.getActiveSpreadsheet();
+      const dbSheet = ss.getSheetByName('Project Analysis Database');
+      
+      if (!dbSheet) return {success: false, message: 'Database not found'};
+      
+      // Get all data in one batch
+      const lastRow = dbSheet.getLastRow();
+      const lastCol = dbSheet.getLastColumn();
+      
+      if (lastRow < 2) {
+        return {success: true, count: 0, message: 'No projects in database'};
+      }
+      
+      const allData = dbSheet.getRange(1, 1, lastRow, lastCol).getValues();
+      const headers = allData[0];
+      const columnMap = new Map(headers.map((h, i) => [h, i]));
+      
+      // Process in memory
+      const results = [];
+      
+      for (let i = 1; i < allData.length; i++) {
+        if (evaluateConditionsInMemory(allData[i], conditions, columnMap)) {
+          results.push(i + 1); // Row number (1-based)
+        }
+      }
+      
+      // Create results sheet
+      displayQueryResults(dbSheet, results, conditions);
+      
+      batchService.trackPerformance('executeQuery', Date.now() - start);
+      
+      return {
+        success: true,
+        count: results.length,
+        message: `Found ${results.length} project(s) matching the criteria.`
+      };
+      
+    } catch (error) {
+      console.error('[BatchService] executeQueryFromDialog optimization failed:', error);
+      // Fallback to original
+      return OriginalFunctions.executeQueryFromDialog(conditions);
+    }
+  };
+}
+
+// Helper function for in-memory condition evaluation
+function evaluateConditionsInMemory(row, conditions, columnMap) {
+  if (conditions.length === 0) return false;
+  
+  let result = true;
+  let isFirst = true;
+  
+  for (const condition of conditions) {
+    const colIndex = columnMap.get(condition.field);
+    if (colIndex === undefined) continue;
+    
+    const fieldValue = row[colIndex];
+    const tempResult = evaluateSingleCondition(fieldValue, condition.operator, 
+                                              condition.value, condition.valueTo);
+    
+    if (isFirst) {
+      result = tempResult;
+      isFirst = false;
+    } else {
+      if (condition.logic === 'AND') {
+        result = result && tempResult;
+      } else {
+        result = result || tempResult;
+      }
+    }
+  }
+  
+  return result;
+}
+
+// Override onOpen to initialize batch service
+if (OriginalFunctions.onOpen) {
+  onOpen = function() {
+    try {
+      // Initialize batch service
+      const batchService = BatchService.getInstance();
+      batchService.log('Initializing batch service...');
+      
+      // Pre-warm configuration cache
+      const config = getConfig();
+      if (config) {
+        batchService.log('Configuration pre-cached');
+      }
+    } catch (error) {
+      console.error('[BatchService] Initialization error:', error);
+    }
+    
+    // Call original onOpen
+    OriginalFunctions.onOpen();
+  };
+}
+
+// Override analyzeProject to ensure proper flushing
+if (OriginalFunctions.analyzeProject) {
+  analyzeProject = function() {
+    const batchService = BatchService.getInstance();
+    
+    // Ensure any pending writes are flushed before analysis
+    if (batchService.isEnabled) {
+      batchService.forceFlush();
+    }
+    
+    return OriginalFunctions.analyzeProject();
+  };
+}
+
+// Override processCategorization for batch operations
+if (OriginalFunctions.processCategorization) {
+  processCategorization = function(categorizedData) {
+    const batchService = BatchService.getInstance();
+    
+    if (!batchService.isEnabled) {
+      return OriginalFunctions.processCategorization(categorizedData);
+    }
+    
+    try {
+      // Process with batching
+      const result = OriginalFunctions.processCategorization(categorizedData);
+      
+      // Ensure all writes are flushed
+      batchService.forceFlush();
+      
+      return result;
+      
+    } catch (error) {
+      // On error, attempt to flush any pending operations
+      batchService.forceFlush();
+      throw error;
+    }
+  };
+}
