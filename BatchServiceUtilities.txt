@@ -1,0 +1,322 @@
+/**
+ * BatchServiceUtilities.gs
+ * Utility functions for batch service management and monitoring
+ */
+
+// Performance monitoring dashboard
+function showBatchServiceDashboard() {
+  const html = HtmlService.createHtmlOutput(`
+    <!DOCTYPE html>
+    <html>
+    <head>
+      <style>
+        body {
+          font-family: Arial, sans-serif;
+          padding: 20px;
+          background: #f5f5f5;
+        }
+        .container {
+          max-width: 800px;
+          margin: 0 auto;
+          background: white;
+          padding: 20px;
+          border-radius: 8px;
+          box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        h1 {
+          color: #333;
+          border-bottom: 2px solid #4285f4;
+          padding-bottom: 10px;
+        }
+        .metric {
+          display: inline-block;
+          margin: 10px;
+          padding: 15px;
+          background: #f8f9fa;
+          border-radius: 4px;
+          min-width: 150px;
+        }
+        .metric-label {
+          font-size: 12px;
+          color: #666;
+          text-transform: uppercase;
+        }
+        .metric-value {
+          font-size: 24px;
+          font-weight: bold;
+          color: #1a73e8;
+        }
+        .performance-table {
+          width: 100%;
+          border-collapse: collapse;
+          margin-top: 20px;
+        }
+        .performance-table th, .performance-table td {
+          padding: 10px;
+          text-align: left;
+          border-bottom: 1px solid #ddd;
+        }
+        .performance-table th {
+          background: #f8f9fa;
+          font-weight: bold;
+        }
+        .status {
+          display: inline-block;
+          padding: 4px 8px;
+          border-radius: 4px;
+          font-size: 12px;
+          font-weight: bold;
+        }
+        .status.enabled {
+          background: #34a853;
+          color: white;
+        }
+        .status.disabled {
+          background: #ea4335;
+          color: white;
+        }
+        .actions {
+          margin-top: 20px;
+        }
+        .btn {
+          padding: 8px 16px;
+          margin: 5px;
+          border: none;
+          border-radius: 4px;
+          cursor: pointer;
+          font-size: 14px;
+          transition: all 0.3s;
+        }
+        .btn-primary {
+          background: #1a73e8;
+          color: white;
+        }
+        .btn-primary:hover {
+          background: #1557b0;
+        }
+        .btn-secondary {
+          background: #f8f9fa;
+          border: 1px solid #dadce0;
+        }
+        .btn-secondary:hover {
+          background: #e8eaed;
+        }
+        .btn-danger {
+          background: #ea4335;
+          color: white;
+        }
+        .btn-danger:hover {
+          background: #c5221f;
+        }
+      </style>
+    </head>
+    <body>
+      <div class="container">
+        <h1>Batch Service Performance Dashboard</h1>
+        <div id="metrics">Loading metrics...</div>
+        <div class="actions">
+          <button class="btn btn-primary" onclick="refreshMetrics()">Refresh</button>
+          <button class="btn btn-secondary" onclick="toggleService()">Toggle Service</button>
+          <button class="btn btn-secondary" onclick="clearCache()">Clear Cache</button>
+          <button class="btn btn-danger" onclick="resetService()">Reset Service</button>
+        </div>
+      </div>
+      
+      <script>
+        function loadMetrics() {
+          google.script.run
+            .withSuccessHandler(displayMetrics)
+            .withFailureHandler(showError)
+            .getBatchServiceMetrics();
+        }
+        
+        function displayMetrics(metrics) {
+          let html = '<div class="metrics-row">';
+          
+          // Status
+          html += '<div class="metric">';
+          html += '<div class="metric-label">Status</div>';
+          html += '<div class="metric-value">';
+          html += '<span class="status ' + (metrics.isEnabled ? 'enabled' : 'disabled') + '">';
+          html += metrics.isEnabled ? 'ENABLED' : 'DISABLED';
+          html += '</span></div></div>';
+          
+          // Cache size
+          html += '<div class="metric">';
+          html += '<div class="metric-label">Cache Size</div>';
+          html += '<div class="metric-value">' + metrics.cacheSize + '</div>';
+          html += '</div>';
+          
+          // Queue size
+          html += '<div class="metric">';
+          html += '<div class="metric-label">Write Queue</div>';
+          html += '<div class="metric-value">' + metrics.queueSize + '</div>';
+          html += '</div>';
+          
+          html += '</div>';
+          
+          // Performance table
+          if (Object.keys(metrics.performance).length > 0) {
+            html += '<h2>Performance Metrics</h2>';
+            html += '<table class="performance-table">';
+            html += '<tr><th>Operation</th><th>Count</th><th>Avg Time (ms)</th>';
+            html += '<th>Min Time (ms)</th><th>Max Time (ms)</th><th>Total Time (ms)</th></tr>';
+            
+            for (const [op, data] of Object.entries(metrics.performance)) {
+              html += '<tr>';
+              html += '<td>' + op + '</td>';
+              html += '<td>' + data.count + '</td>';
+              html += '<td>' + data.avgTime + '</td>';
+              html += '<td>' + data.minTime + '</td>';
+              html += '<td>' + data.maxTime + '</td>';
+              html += '<td>' + data.totalTime + '</td>';
+              html += '</tr>';
+            }
+            
+            html += '</table>';
+          }
+          
+          document.getElementById('metrics').innerHTML = html;
+        }
+        
+        function showError(error) {
+          document.getElementById('metrics').innerHTML = 
+            '<div style="color: red;">Error: ' + error.message + '</div>';
+        }
+        
+        function refreshMetrics() {
+          document.getElementById('metrics').innerHTML = 'Loading metrics...';
+          loadMetrics();
+        }
+        
+        function toggleService() {
+          google.script.run
+            .withSuccessHandler(() => {
+              refreshMetrics();
+            })
+            .toggleBatchService();
+        }
+        
+        function clearCache() {
+          if (confirm('Clear all cached data?')) {
+            google.script.run
+              .withSuccessHandler(() => {
+                alert('Cache cleared');
+                refreshMetrics();
+              })
+              .clearBatchCache();
+          }
+        }
+        
+        function resetService() {
+          if (confirm('Reset batch service? This will clear all data and metrics.')) {
+            google.script.run
+              .withSuccessHandler(() => {
+                alert('Service reset');
+                refreshMetrics();
+              })
+              .resetBatchService();
+          }
+        }
+        
+        // Load metrics on startup
+        window.onload = loadMetrics;
+        
+        // Auto-refresh every 5 seconds
+        setInterval(loadMetrics, 5000);
+      </script>
+    </body>
+    </html>
+  `).setWidth(850).setHeight(600);
+  
+  SpreadsheetApp.getUi().showModalDialog(html, 'Batch Service Dashboard');
+}
+
+// Service control functions
+function toggleBatchService() {
+  const service = BatchService.getInstance();
+  service.isEnabled = !service.isEnabled;
+  return service.isEnabled;
+}
+
+function clearBatchCache() {
+  const service = BatchService.getInstance();
+  service.invalidateCache();
+}
+
+// Test functions
+function testBatchServicePerformance() {
+  const ui = SpreadsheetApp.getUi();
+  const service = BatchService.getInstance();
+  
+  ui.alert('Performance Test', 'Starting performance comparison test...', ui.ButtonSet.OK);
+  
+  // Test with optimization OFF
+  service.isEnabled = false;
+  const startOff = Date.now();
+  const resultsOff = getProjectsForSelection();
+  const timeOff = Date.now() - startOff;
+  
+  // Test with optimization ON
+  service.isEnabled = true;
+  service.invalidateCache(); // Clear cache for fair comparison
+  const startOn = Date.now();
+  const resultsOn = getProjectsForSelection();
+  const timeOn = Date.now() - startOn;
+  
+  // Second call to test caching
+  const startCached = Date.now();
+  const resultsCached = getProjectsForSelection();
+  const timeCached = Date.now() - startCached;
+  
+  // Compare results
+  const resultsMatch = JSON.stringify(resultsOff) === JSON.stringify(resultsOn);
+  
+  const message = `Performance Test Results:\n\n` +
+    `Original: ${timeOff}ms\n` +
+    `Optimized (first): ${timeOn}ms (${Math.round(timeOff/timeOn)}x faster)\n` +
+    `Optimized (cached): ${timeCached}ms (${Math.round(timeOff/timeCached)}x faster)\n\n` +
+    `Results match: ${resultsMatch ? 'YES ✓' : 'NO ✗'}\n` +
+    `Projects found: ${resultsOn.length}`;
+  
+  ui.alert('Test Results', message, ui.ButtonSet.OK);
+  
+  return {
+    originalTime: timeOff,
+    optimizedTime: timeOn,
+    cachedTime: timeCached,
+    speedup: timeOff / timeOn,
+    cachedSpeedup: timeOff / timeCached,
+    resultsMatch: resultsMatch
+  };
+}
+
+// Debug functions
+function enableBatchServiceDebug() {
+  BatchService.getInstance().debugMode = true;
+  console.log('Batch service debug mode enabled');
+}
+
+function disableBatchServiceDebug() {
+  BatchService.getInstance().debugMode = false;
+  console.log('Batch service debug mode disabled');
+}
+
+// Menu integration
+function addBatchServiceMenu() {
+  const ui = SpreadsheetApp.getUi();
+  
+  ui.createMenu('⚡ Batch Service')
+    .addItem('📊 Performance Dashboard', 'showBatchServiceDashboard')
+    .addItem('🧪 Run Performance Test', 'testBatchServicePerformance')
+    .addSeparator()
+    .addItem('✅ Enable Service', 'enableBatchOptimization')
+    .addItem('❌ Disable Service', 'disableBatchOptimization')
+    .addSeparator()
+    .addItem('🗑️ Clear Cache', 'clearBatchCache')
+    .addItem('🔄 Reset Service', 'resetBatchService')
+    .addSeparator()
+    .addItem('🐛 Enable Debug Mode', 'enableBatchServiceDebug')
+    .addItem('🚫 Disable Debug Mode', 'disableBatchServiceDebug')
+    .addToUi();
+}
