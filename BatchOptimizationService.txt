@@ -1,0 +1,390 @@
+/**
+ * BatchOptimizationService.gs
+ * Non-invasive batch optimization layer for Google Sheets operations
+ * Version: 1.0.0
+ * 
+ * This service intercepts sheet operations and batches them for performance
+ * without modifying existing code structure or functionality.
+ */
+
+const BatchService = (function() {
+  let instance = null;
+  
+  function BatchServiceSingleton() {
+    // Core properties
+    this.isEnabled = true;
+    this.readCache = new Map();
+    this.writeQueue = [];
+    this.flushTimer = null;
+    this.configCache = null;
+    this.performanceMetrics = new Map();
+    this.debugMode = false;
+    
+    // Cache configuration
+    this.cacheConfig = {
+      sheetDataTTL: 30000,      // 30 seconds
+      configTTL: 300000,         // 5 minutes
+      projectListTTL: 60000,     // 1 minute
+      maxCacheSize: 100          // Maximum cache entries
+    };
+    
+    // Batch configuration
+    this.batchConfig = {
+      maxBatchSize: 500,         // Maximum writes per batch
+      flushDelay: 100,           // Milliseconds before auto-flush
+      maxQueueSize: 1000         // Maximum queued operations
+    };
+  }
+  
+  // Performance tracking
+  BatchServiceSingleton.prototype.trackPerformance = function(operation, duration) {
+    if (!this.performanceMetrics.has(operation)) {
+      this.performanceMetrics.set(operation, {
+        count: 0,
+        totalTime: 0,
+        avgTime: 0,
+        maxTime: 0,
+        minTime: Infinity
+      });
+    }
+    
+    const metrics = this.performanceMetrics.get(operation);
+    metrics.count++;
+    metrics.totalTime += duration;
+    metrics.avgTime = metrics.totalTime / metrics.count;
+    metrics.maxTime = Math.max(metrics.maxTime, duration);
+    metrics.minTime = Math.min(metrics.minTime, duration);
+  };
+  
+  // Debug logging
+  BatchServiceSingleton.prototype.log = function(message, data = null) {
+    if (this.debugMode) {
+      console.log(`[BatchService] ${message}`, data || '');
+    }
+  };
+  
+  // Cache management
+  BatchServiceSingleton.prototype.getCacheKey = function(type, ...params) {
+    return `${type}_${params.join('_')}`;
+  };
+  
+  BatchServiceSingleton.prototype.getFromCache = function(key, ttl = null) {
+    const cached = this.readCache.get(key);
+    if (!cached) return null;
+    
+    const effectiveTTL = ttl || this.cacheConfig.sheetDataTTL;
+    if (Date.now() - cached.timestamp > effectiveTTL) {
+      this.readCache.delete(key);
+      return null;
+    }
+    
+    return cached.data;
+  };
+  
+  BatchServiceSingleton.prototype.setCache = function(key, data) {
+    // Implement LRU eviction if cache is too large
+    if (this.readCache.size >= this.cacheConfig.maxCacheSize) {
+      const firstKey = this.readCache.keys().next().value;
+      this.readCache.delete(firstKey);
+    }
+    
+    this.readCache.set(key, {
+      data: data,
+      timestamp: Date.now()
+    });
+  };
+  
+  // Sheet data caching
+  BatchServiceSingleton.prototype.getSheetCache = function(sheet) {
+    const cacheKey = this.getCacheKey('sheet', sheet.getName(), sheet.getSheetId());
+    let cached = this.getFromCache(cacheKey);
+    
+    if (!cached) {
+      const start = Date.now();
+      const lastRow = sheet.getLastRow();
+      const lastCol = sheet.getLastColumn();
+      
+      if (lastRow > 0 && lastCol > 0) {
+        cached = sheet.getRange(1, 1, lastRow, lastCol).getValues();
+        this.setCache(cacheKey, cached);
+        this.trackPerformance('sheetRead', Date.now() - start);
+        this.log(`Cached sheet data: ${sheet.getName()} (${lastRow}x${lastCol})`);
+      }
+    }
+    
+    return cached;
+  };
+  
+  // Batch write operations
+  BatchServiceSingleton.prototype.queueWrite = function(sheet, row, columnLetter, value) {
+    if (this.writeQueue.length >= this.batchConfig.maxQueueSize) {
+      this.log('Write queue full, flushing...');
+      this.flushWrites();
+    }
+    
+    this.writeQueue.push({
+      sheet: sheet,
+      sheetId: sheet.getSheetId(),
+      sheetName: sheet.getName(),
+      row: row,
+      col: letterToColumn(columnLetter),
+      columnLetter: columnLetter,
+      value: value,
+      timestamp: Date.now()
+    });
+    
+    this.scheduleFlush();
+  };
+  
+  BatchServiceSingleton.prototype.scheduleFlush = function() {
+    if (this.flushTimer) {
+      clearTimeout(this.flushTimer);
+    }
+    
+    this.flushTimer = setTimeout(() => {
+      this.flushWrites();
+    }, this.batchConfig.flushDelay);
+  };
+  
+  BatchServiceSingleton.prototype.flushWrites = function() {
+    if (this.writeQueue.length === 0) return;
+    
+    const start = Date.now();
+    const queueSize = this.writeQueue.length;
+    this.log(`Flushing ${queueSize} writes...`);
+    
+    try {
+      // Group writes by sheet
+      const writesBySheet = new Map();
+      
+      this.writeQueue.forEach(write => {
+        if (!writesBySheet.has(write.sheetId)) {
+          writesBySheet.set(write.sheetId, []);
+        }
+        writesBySheet.get(write.sheetId).push(write);
+      });
+      
+      // Process each sheet's writes
+      writesBySheet.forEach((writes, sheetId) => {
+        this.processBatchWrites(writes);
+      });
+      
+      // Clear queue
+      this.writeQueue = [];
+      this.flushTimer = null;
+      
+      // Invalidate affected caches
+      writesBySheet.forEach((writes, sheetId) => {
+        const sheetName = writes[0].sheetName;
+        this.invalidateSheetCache(sheetName, sheetId);
+      });
+      
+      this.trackPerformance('batchWrite', Date.now() - start);
+      this.log(`Flushed ${queueSize} writes in ${Date.now() - start}ms`);
+      
+    } catch (error) {
+      console.error('[BatchService] Flush error:', error);
+      // Attempt individual writes as fallback
+      this.fallbackWrites();
+    }
+  };
+  
+  BatchServiceSingleton.prototype.processBatchWrites = function(writes) {
+    if (writes.length === 0) return;
+    
+    const sheet = writes[0].sheet;
+    
+    // Sort writes by row then column for optimal range detection
+    writes.sort((a, b) => a.row - b.row || a.col - b.col);
+    
+    // Find contiguous ranges
+    const ranges = this.detectContiguousRanges(writes);
+    
+    ranges.forEach(range => {
+      if (range.cells.length === 1) {
+        // Single cell write
+        const cell = range.cells[0];
+        sheet.getRange(cell.row, cell.col).setValue(cell.value);
+      } else {
+        // Multi-cell write
+        const values = this.prepareRangeValues(range);
+        sheet.getRange(
+          range.minRow,
+          range.minCol,
+          range.maxRow - range.minRow + 1,
+          range.maxCol - range.minCol + 1
+        ).setValues(values);
+      }
+    });
+  };
+  
+  BatchServiceSingleton.prototype.detectContiguousRanges = function(writes) {
+    const ranges = [];
+    let currentRange = null;
+    
+    writes.forEach(write => {
+      if (!currentRange) {
+        currentRange = {
+          minRow: write.row,
+          maxRow: write.row,
+          minCol: write.col,
+          maxCol: write.col,
+          cells: [write]
+        };
+      } else if (
+        write.row <= currentRange.maxRow + 1 &&
+        write.col <= currentRange.maxCol + 1 &&
+        write.row >= currentRange.minRow &&
+        write.col >= currentRange.minCol - 1
+      ) {
+        // Extend current range
+        currentRange.maxRow = Math.max(currentRange.maxRow, write.row);
+        currentRange.maxCol = Math.max(currentRange.maxCol, write.col);
+        currentRange.minRow = Math.min(currentRange.minRow, write.row);
+        currentRange.minCol = Math.min(currentRange.minCol, write.col);
+        currentRange.cells.push(write);
+      } else {
+        // Start new range
+        ranges.push(currentRange);
+        currentRange = {
+          minRow: write.row,
+          maxRow: write.row,
+          minCol: write.col,
+          maxCol: write.col,
+          cells: [write]
+        };
+      }
+    });
+    
+    if (currentRange) {
+      ranges.push(currentRange);
+    }
+    
+    return ranges;
+  };
+  
+  BatchServiceSingleton.prototype.prepareRangeValues = function(range) {
+    const rows = range.maxRow - range.minRow + 1;
+    const cols = range.maxCol - range.minCol + 1;
+    
+    // Initialize with empty values
+    const values = Array(rows).fill(null).map(() => Array(cols).fill(''));
+    
+    // Fill in the actual values
+    range.cells.forEach(cell => {
+      const rowIndex = cell.row - range.minRow;
+      const colIndex = cell.col - range.minCol;
+      values[rowIndex][colIndex] = cell.value;
+    });
+    
+    return values;
+  };
+  
+  BatchServiceSingleton.prototype.fallbackWrites = function() {
+    this.log('Falling back to individual writes...');
+    const writes = [...this.writeQueue];
+    this.writeQueue = [];
+    
+    writes.forEach(write => {
+      try {
+        write.sheet.getRange(write.row, write.col).setValue(write.value);
+      } catch (error) {
+        console.error(`[BatchService] Failed to write cell ${write.row}:${write.col}`, error);
+      }
+    });
+  };
+  
+  BatchServiceSingleton.prototype.invalidateSheetCache = function(sheetName, sheetId) {
+    const cacheKey = this.getCacheKey('sheet', sheetName, sheetId);
+    this.readCache.delete(cacheKey);
+  };
+  
+  BatchServiceSingleton.prototype.invalidateCache = function(pattern = null) {
+    if (!pattern) {
+      this.readCache.clear();
+      this.configCache = null;
+    } else {
+      Array.from(this.readCache.keys()).forEach(key => {
+        if (key.includes(pattern)) {
+          this.readCache.delete(key);
+        }
+      });
+    }
+  };
+  
+  BatchServiceSingleton.prototype.forceFlush = function() {
+    if (this.flushTimer) {
+      clearTimeout(this.flushTimer);
+      this.flushTimer = null;
+    }
+    this.flushWrites();
+  };
+  
+  BatchServiceSingleton.prototype.getMetrics = function() {
+    const metrics = {
+      cacheSize: this.readCache.size,
+      queueSize: this.writeQueue.length,
+      isEnabled: this.isEnabled,
+      performance: {}
+    };
+    
+    this.performanceMetrics.forEach((data, operation) => {
+      metrics.performance[operation] = {
+        count: data.count,
+        avgTime: Math.round(data.avgTime),
+        maxTime: data.maxTime,
+        minTime: data.minTime === Infinity ? 0 : data.minTime,
+        totalTime: Math.round(data.totalTime)
+      };
+    });
+    
+    return metrics;
+  };
+  
+  BatchServiceSingleton.prototype.reset = function() {
+    this.forceFlush();
+    this.readCache.clear();
+    this.configCache = null;
+    this.performanceMetrics.clear();
+  };
+  
+  return {
+    getInstance: function() {
+      if (!instance) {
+        instance = new BatchServiceSingleton();
+      }
+      return instance;
+    }
+  };
+})();
+
+// Helper function for column letter conversion (if not already defined)
+function letterToColumn(letter) {
+  let column = 0;
+  for (let i = 0; i < letter.length; i++) {
+    column = column * 26 + letter.charCodeAt(i) - 'A'.charCodeAt(0) + 1;
+  }
+  return column;
+}
+
+// Global control functions
+function enableBatchOptimization() {
+  BatchService.getInstance().isEnabled = true;
+  console.log('Batch optimization enabled');
+}
+
+function disableBatchOptimization() {
+  const service = BatchService.getInstance();
+  service.forceFlush();
+  service.isEnabled = false;
+  console.log('Batch optimization disabled');
+}
+
+function getBatchServiceMetrics() {
+  return BatchService.getInstance().getMetrics();
+}
+
+function resetBatchService() {
+  BatchService.getInstance().reset();
+  console.log('Batch service reset');
+}
