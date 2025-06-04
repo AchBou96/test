@@ -1,0 +1,95 @@
+/**
+ * WaterfallEnhancementService.gs
+ * Non-invasive enhancement layer for waterfall chart functionality
+ */
+
+const WaterfallEnhancer = (function() {
+  let instance = null;
+  
+  function WaterfallEnhancerSingleton() {
+    this.isEnabled = true;
+    this.currentProject = null;
+    this.chartCache = new Map();
+    this.selectionHistory = [];
+    this.originalFunctions = {};
+    
+    // Configuration
+    this.config = {
+      enableCache: true,
+      cacheTimeout: 300000, // 5 minutes
+      enhancedTooltips: true,
+      autoSave: true,
+      animations: true
+    };
+  }
+  
+  // Project selection methods
+  WaterfallEnhancerSingleton.prototype.getAvailableProjects = function() {
+    const ss = SpreadsheetApp.getActiveSpreadsheet();
+    const sheets = ss.getSheets();
+    
+    const projects = {
+      summarySheets: [],
+      analyzedProjects: [],
+      databaseProjects: []
+    };
+    
+    // Find summary sheets
+    sheets.forEach(sheet => {
+      const name = sheet.getName();
+      if (name.endsWith(' Summary')) {
+        const projectName = name.replace(' Summary', '');
+        projects.summarySheets.push({
+          name: projectName,
+          sheetName: name,
+          type: 'summary',
+          lastModified: this.getSheetLastModified(sheet)
+        });
+      }
+    });
+    
+    // Check database for projects
+    const dbSheet = ss.getSheetByName('Project Analysis Database');
+    if (dbSheet && dbSheet.getLastRow() > 1) {
+      const data = dbSheet.getRange(2, 1, dbSheet.getLastRow() - 1, 4).getValues();
+      
+      data.forEach((row, index) => {
+        if (row[0]) { // Project number exists
+          projects.databaseProjects.push({
+            projectNumber: row[0],
+            projectName: row[1],
+            eacCost: row[2],
+            budgetCost: row[3],
+            type: 'database',
+            rowIndex: index + 2
+          });
+        }
+      });
+    }
+    
+    return projects;
+  };
+  
+  WaterfallEnhancerSingleton.prototype.getSheetLastModified = function(sheet) {
+    // Approximate last modified by checking last row
+    try {
+      const lastRow = sheet.getLastRow();
+      if (lastRow > 0) {
+        const lastCell = sheet.getRange(lastRow, 1);
+        // Return current time as approximation
+        return new Date();
+      }
+    } catch (e) {
+      return null;
+    }
+  };
+  
+  return {
+    getInstance: function() {
+      if (!instance) {
+        instance = new WaterfallEnhancerSingleton();
+      }
+      return instance;
+    }
+  };
+})();
