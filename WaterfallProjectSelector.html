@@ -1,0 +1,989 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <base target="_top">
+  <style>
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+    
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background: #f5f7fa;
+      padding: 0;
+      margin: 0;
+      height: 100vh;
+      overflow: hidden;
+    }
+    
+    .selector-container {
+      display: flex;
+      height: 100vh;
+      background: white;
+    }
+    
+    /* Left Panel - Project List */
+    .project-panel {
+      width: 400px;
+      background: #ffffff;
+      border-right: 1px solid #e0e0e0;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+    
+    .panel-header {
+      padding: 24px;
+      background: linear-gradient(135deg, #1a73e8 0%, #1557b0 100%);
+      color: white;
+    }
+    
+    .panel-title {
+      font-size: 20px;
+      font-weight: 600;
+      margin-bottom: 8px;
+    }
+    
+    .panel-subtitle {
+      font-size: 14px;
+      opacity: 0.9;
+    }
+    
+    .search-container {
+      padding: 16px;
+      background: #f8f9fa;
+      border-bottom: 1px solid #e0e0e0;
+    }
+    
+    .search-input {
+      width: 100%;
+      padding: 12px 16px;
+      border: 1px solid #dadce0;
+      border-radius: 8px;
+      font-size: 14px;
+      transition: all 0.2s;
+    }
+    
+    .search-input:focus {
+      outline: none;
+      border-color: #1a73e8;
+      box-shadow: 0 0 0 3px rgba(26, 115, 232, 0.1);
+    }
+    
+    .filter-tabs {
+      display: flex;
+      padding: 0 16px;
+      background: #f8f9fa;
+      border-bottom: 1px solid #e0e0e0;
+    }
+    
+    .filter-tab {
+      padding: 12px 16px;
+      font-size: 14px;
+      font-weight: 500;
+      color: #5f6368;
+      border: none;
+      background: none;
+      cursor: pointer;
+      position: relative;
+      transition: all 0.2s;
+    }
+    
+    .filter-tab:hover {
+      color: #1a73e8;
+    }
+    
+    .filter-tab.active {
+      color: #1a73e8;
+    }
+    
+    .filter-tab.active::after {
+      content: '';
+      position: absolute;
+      bottom: 0;
+      left: 0;
+      right: 0;
+      height: 3px;
+      background: #1a73e8;
+      border-radius: 3px 3px 0 0;
+    }
+    
+    .project-list {
+      flex: 1;
+      overflow-y: auto;
+      padding: 16px;
+    }
+    
+    .project-group {
+      margin-bottom: 24px;
+    }
+    
+    .group-header {
+      font-size: 12px;
+      font-weight: 600;
+      color: #5f6368;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      margin-bottom: 8px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    
+    .group-count {
+      background: #e8eaed;
+      padding: 2px 8px;
+      border-radius: 12px;
+      font-size: 11px;
+    }
+    
+    .project-item {
+      background: #f8f9fa;
+      border: 1px solid #e0e0e0;
+      border-radius: 8px;
+      padding: 16px;
+      margin-bottom: 8px;
+      cursor: pointer;
+      transition: all 0.2s;
+      position: relative;
+    }
+    
+    .project-item:hover {
+      border-color: #1a73e8;
+      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+      transform: translateY(-1px);
+    }
+    
+    .project-item.selected {
+      background: #e8f0fe;
+      border-color: #1a73e8;
+      border-width: 2px;
+      padding: 15px;
+    }
+    
+    .project-item.selected::after {
+      content: '✓';
+      position: absolute;
+      top: 12px;
+      right: 12px;
+      width: 24px;
+      height: 24px;
+      background: #1a73e8;
+      color: white;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 14px;
+      font-weight: bold;
+    }
+    
+    .project-name {
+      font-size: 16px;
+      font-weight: 600;
+      color: #202124;
+      margin-bottom: 4px;
+    }
+    
+    .project-details {
+      font-size: 13px;
+      color: #5f6368;
+      display: flex;
+      gap: 16px;
+      margin-top: 8px;
+    }
+    
+    .project-detail {
+      display: flex;
+      align-items: center;
+      gap: 4px;
+    }
+    
+    .detail-icon {
+      font-size: 16px;
+    }
+    
+    .cost-indicator {
+      display: inline-block;
+      padding: 2px 8px;
+      border-radius: 4px;
+      font-size: 11px;
+      font-weight: 600;
+      margin-left: 8px;
+    }
+    
+    .over-budget {
+      background: #fce8e6;
+      color: #d33b30;
+    }
+    
+    .under-budget {
+      background: #e6f4ea;
+      color: #188038;
+    }
+    
+    /* Right Panel - Preview */
+    .preview-panel {
+      flex: 1;
+      background: #f8f9fa;
+      display: flex;
+      flex-direction: column;
+    }
+    
+    .preview-header {
+      padding: 24px;
+      background: white;
+      border-bottom: 1px solid #e0e0e0;
+    }
+    
+    .preview-content {
+      flex: 1;
+      padding: 24px;
+      overflow-y: auto;
+    }
+    
+    .empty-state {
+      height: 100%;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      text-align: center;
+      color: #5f6368;
+    }
+    
+    .empty-icon {
+      font-size: 64px;
+      margin-bottom: 16px;
+      opacity: 0.3;
+    }
+    
+    .empty-title {
+      font-size: 18px;
+      font-weight: 500;
+      margin-bottom: 8px;
+      color: #202124;
+    }
+    
+    .empty-message {
+      font-size: 14px;
+      max-width: 300px;
+    }
+    
+    .preview-data {
+      background: white;
+      border-radius: 8px;
+      padding: 24px;
+      box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+    }
+    
+    .preview-title {
+      font-size: 20px;
+      font-weight: 600;
+      color: #202124;
+      margin-bottom: 16px;
+    }
+    
+    .preview-metrics {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 16px;
+      margin-bottom: 24px;
+    }
+    
+    .metric-card {
+      padding: 16px;
+      background: #f8f9fa;
+      border-radius: 8px;
+      border: 1px solid #e0e0e0;
+    }
+    
+    .metric-label {
+      font-size: 12px;
+      color: #5f6368;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      margin-bottom: 4px;
+    }
+    
+    .metric-value {
+      font-size: 24px;
+      font-weight: 600;
+      color: #202124;
+    }
+    
+    .preview-chart {
+      margin-top: 24px;
+      padding: 20px;
+      background: white;
+      border-radius: 8px;
+      border: 1px solid #e0e0e0;
+      min-height: 200px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    
+    .mini-waterfall {
+      width: 100%;
+      height: 200px;
+      position: relative;
+    }
+    
+    /* Action Footer */
+    .action-footer {
+      padding: 16px 24px;
+      background: white;
+      border-top: 1px solid #e0e0e0;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    
+    .selection-info {
+      font-size: 14px;
+      color: #5f6368;
+    }
+    
+    .action-buttons {
+      display: flex;
+      gap: 12px;
+    }
+    
+    .btn {
+      padding: 10px 24px;
+      border: none;
+      border-radius: 8px;
+      font-size: 14px;
+      font-weight: 500;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+    
+    .btn-secondary {
+      background: white;
+      color: #5f6368;
+      border: 1px solid #dadce0;
+    }
+    
+    .btn-secondary:hover {
+      background: #f8f9fa;
+      border-color: #5f6368;
+    }
+    
+    .btn-primary {
+      background: #1a73e8;
+      color: white;
+    }
+    
+    .btn-primary:hover:not(:disabled) {
+      background: #1557b0;
+      box-shadow: 0 2px 8px rgba(26, 115, 232, 0.3);
+    }
+    
+    .btn:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+    }
+    
+    /* Loading State */
+    .loading-overlay {
+      position: absolute;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background: rgba(255, 255, 255, 0.9);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      z-index: 1000;
+    }
+    
+    .loading-spinner {
+      width: 40px;
+      height: 40px;
+      border: 3px solid #f3f3f3;
+      border-top: 3px solid #1a73e8;
+      border-radius: 50%;
+      animation: spin 1s linear infinite;
+    }
+    
+    @keyframes spin {
+      0% { transform: rotate(0deg); }
+      100% { transform: rotate(360deg); }
+    }
+    
+    /* Options Panel */
+    .options-panel {
+      background: white;
+      border-radius: 8px;
+      padding: 16px;
+      margin-top: 16px;
+      border: 1px solid #e0e0e0;
+    }
+    
+    .option-group {
+      margin-bottom: 16px;
+    }
+    
+    .option-label {
+      font-size: 14px;
+      font-weight: 500;
+      color: #202124;
+      margin-bottom: 8px;
+    }
+    
+    .option-buttons {
+      display: flex;
+      gap: 8px;
+    }
+    
+    .option-btn {
+      padding: 6px 12px;
+      border: 1px solid #dadce0;
+      background: white;
+      border-radius: 6px;
+      font-size: 13px;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+    
+    .option-btn:hover {
+      background: #f8f9fa;
+    }
+    
+    .option-btn.active {
+      background: #1a73e8;
+      color: white;
+      border-color: #1a73e8;
+    }
+    
+    .recent-projects {
+      margin-top: 24px;
+      padding: 16px;
+      background: #f0f4f9;
+      border-radius: 8px;
+    }
+    
+    .recent-title {
+      font-size: 14px;
+      font-weight: 600;
+      margin-bottom: 12px;
+      color: #1a73e8;
+    }
+    
+    .recent-item {
+      padding: 8px;
+      background: white;
+      border-radius: 4px;
+      margin-bottom: 8px;
+      font-size: 13px;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+    
+    .recent-item:hover {
+      background: #e8f0fe;
+    }
+  </style>
+</head>
+<body>
+  <div class="selector-container">
+    <!-- Left Panel - Project List -->
+    <div class="project-panel">
+      <div class="panel-header">
+        <div class="panel-title">Select Project for Waterfall Chart</div>
+        <div class="panel-subtitle">Choose from analyzed projects or database</div>
+      </div>
+      
+      <div class="search-container">
+        <input type="text" 
+               class="search-input" 
+               placeholder="Search projects..." 
+               id="searchInput"
+               onkeyup="filterProjects()">
+      </div>
+      
+      <div class="filter-tabs">
+        <button class="filter-tab active" onclick="switchTab('all')">All Projects</button>
+        <button class="filter-tab" onclick="switchTab('summary')">Summary Sheets</button>
+        <button class="filter-tab" onclick="switchTab('database')">Database</button>
+        <button class="filter-tab" onclick="switchTab('recent')">Recent</button>
+      </div>
+      
+      <div class="project-list" id="projectList">
+        <div class="loading-overlay">
+          <div class="loading-spinner"></div>
+        </div>
+      </div>
+    </div>
+    
+    <!-- Right Panel - Preview -->
+    <div class="preview-panel">
+      <div class="preview-header">
+        <h2 style="margin: 0; font-size: 20px;">Project Preview</h2>
+      </div>
+      
+      <div class="preview-content" id="previewContent">
+        <div class="empty-state">
+          <div class="empty-icon">📊</div>
+          <div class="empty-title">No Project Selected</div>
+          <div class="empty-message">
+            Select a project from the list to preview its financial data and generate a waterfall chart
+          </div>
+        </div>
+      </div>
+      
+      <div class="action-footer">
+        <div class="selection-info">
+          <span id="selectionInfo">No project selected</span>
+        </div>
+        <div class="action-buttons">
+          <button class="btn btn-secondary" onclick="cancel()">Cancel</button>
+          <button class="btn btn-primary" id="visualizeBtn" onclick="visualizeProject()" disabled>
+            Create Waterfall Chart
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+  
+  <script>
+    let projects = {
+      summarySheets: [],
+      databaseProjects: []
+    };
+    let selectedProject = null;
+    let currentTab = 'all';
+    
+    // Load projects on startup
+    window.onload = function() {
+      loadProjects();
+      loadRecentProjects();
+    };
+    
+    function loadProjects() {
+      google.script.run
+        .withSuccessHandler(displayProjects)
+        .withFailureHandler(handleError)
+        .getProjectsForWaterfall();
+    }
+    
+    function displayProjects(data) {
+      projects = data;
+      renderProjectList();
+    }
+    
+    function renderProjectList() {
+      const listEl = document.getElementById('projectList');
+      let html = '';
+      
+      // Filter based on current tab
+      let projectsToShow = [];
+      
+      switch(currentTab) {
+        case 'all':
+          projectsToShow = [
+            ...projects.summarySheets.map(p => ({...p, source: 'summary'})),
+            ...projects.databaseProjects.map(p => ({...p, source: 'database'}))
+          ];
+          break;
+        case 'summary':
+          projectsToShow = projects.summarySheets.map(p => ({...p, source: 'summary'}));
+          break;
+        case 'database':
+          projectsToShow = projects.databaseProjects.map(p => ({...p, source: 'database'}));
+          break;
+        case 'recent':
+          projectsToShow = getRecentProjects();
+          break;
+      }
+      
+      // Apply search filter
+      const searchTerm = document.getElementById('searchInput').value.toLowerCase();
+      if (searchTerm) {
+        projectsToShow = projectsToShow.filter(p => 
+          (p.projectName || p.name || '').toLowerCase().includes(searchTerm) ||
+          (p.projectNumber || '').toLowerCase().includes(searchTerm)
+        );
+      }
+      
+      // Group by source
+      const grouped = groupProjectsBySource(projectsToShow);
+      
+      // Render groups
+      Object.entries(grouped).forEach(([source, projects]) => {
+        if (projects.length === 0) return;
+        
+        html += `
+          <div class="project-group">
+            <div class="group-header">
+              ${source === 'summary' ? '📄 Summary Sheets' : '🗄️ Database Projects'}
+              <span class="group-count">${projects.length}</span>
+            </div>
+        `;
+        
+        projects.forEach(project => {
+          const isSelected = selectedProject && 
+            ((project.projectNumber && project.projectNumber === selectedProject.projectNumber) ||
+             (project.name && project.name === selectedProject.name));
+          
+          html += createProjectCard(project, isSelected);
+        });
+        
+        html += '</div>';
+      });
+      
+      if (projectsToShow.length === 0) {
+        html = `
+          <div class="empty-state">
+            <div class="empty-icon">🔍</div>
+            <div class="empty-title">No Projects Found</div>
+            <div class="empty-message">
+              ${searchTerm ? 'Try a different search term' : 'No projects available in this category'}
+            </div>
+          </div>
+        `;
+      }
+      
+      listEl.innerHTML = html;
+    }
+    
+    function createProjectCard(project, isSelected) {
+      const name = project.projectName || project.name || 'Unnamed Project';
+      const hasVariance = project.eacCost && project.budgetCost;
+      const variance = hasVariance ? project.eacCost - project.budgetCost : null;
+      const isOverBudget = variance && variance > 0;
+      
+      return `
+        <div class="project-item ${isSelected ? 'selected' : ''}" 
+             onclick="selectProject(${escapeQuotes(JSON.stringify(project))})">
+          <div class="project-name">
+            ${escapeHtml(name)}
+            ${variance ? `
+              <span class="cost-indicator ${isOverBudget ? 'over-budget' : 'under-budget'}">
+                ${isOverBudget ? '+' : ''}${formatCurrency(variance)}
+              </span>
+            ` : ''}
+          </div>
+          <div class="project-details">
+            ${project.projectNumber ? `
+              <div class="project-detail">
+                <span class="detail-icon">🔢</span>
+                <span>${escapeHtml(project.projectNumber)}</span>
+              </div>
+            ` : ''}
+            ${project.eacCost ? `
+              <div class="project-detail">
+                <span class="detail-icon">💰</span>
+                <span>${formatCurrency(project.eacCost)}</span>
+              </div>
+            ` : ''}
+            ${project.type ? `
+              <div class="project-detail">
+                <span class="detail-icon">📊</span>
+                <span>${project.type === 'summary' ? 'Analyzed' : 'Database'}</span>
+              </div>
+            ` : ''}
+          </div>
+        </div>
+      `;
+    }
+    
+    function selectProject(project) {
+      selectedProject = project;
+      
+      // Update selection state
+      document.querySelectorAll('.project-item').forEach(el => {
+        el.classList.remove('selected');
+      });
+      event.currentTarget.classList.add('selected');
+      
+      // Update preview
+      updatePreview(project);
+      
+      // Enable visualize button
+      document.getElementById('visualizeBtn').disabled = false;
+      document.getElementById('selectionInfo').textContent = 
+        `Selected: ${project.projectName || project.name}`;
+      
+      // Save to recent
+      saveToRecent(project);
+    }
+    
+    function updatePreview(project) {
+      const previewEl = document.getElementById('previewContent');
+      
+      if (!project) {
+        previewEl.innerHTML = getEmptyStateHTML();
+        return;
+      }
+      
+      let html = `
+        <div class="preview-data">
+          <div class="preview-title">${escapeHtml(project.projectName || project.name)}</div>
+          
+          <div class="preview-metrics">
+      `;
+      
+      if (project.eacCost) {
+        html += `
+          <div class="metric-card">
+            <div class="metric-label">EAC Cost</div>
+            <div class="metric-value">${formatCurrency(project.eacCost)}</div>
+          </div>
+        `;
+      }
+      
+      if (project.budgetCost) {
+        html += `
+          <div class="metric-card">
+            <div class="metric-label">Budget</div>
+            <div class="metric-value">${formatCurrency(project.budgetCost)}</div>
+          </div>
+        `;
+      }
+      
+      if (project.eacCost && project.budgetCost) {
+        const variance = project.eacCost - project.budgetCost;
+        const variancePercent = (variance / project.budgetCost * 100).toFixed(1);
+        
+        html += `
+          <div class="metric-card">
+            <div class="metric-label">Variance</div>
+            <div class="metric-value" style="color: ${variance > 0 ? '#d33b30' : '#188038'}">
+              ${variance > 0 ? '+' : ''}${formatCurrency(variance)}
+            </div>
+          </div>
+          <div class="metric-card">
+            <div class="metric-label">Variance %</div>
+            <div class="metric-value" style="color: ${variance > 0 ? '#d33b30' : '#188038'}">
+              ${variance > 0 ? '+' : ''}${variancePercent}%
+            </div>
+          </div>
+        `;
+      }
+      
+      html += `
+          </div>
+          
+          <div class="options-panel">
+            <div class="option-group">
+              <div class="option-label">Chart View</div>
+              <div class="option-buttons">
+                <button class="option-btn active" onclick="setOption('view', 'category')">
+                  By Category
+                </button>
+                <button class="option-btn" onclick="setOption('view', 'subcategory')">
+                  By Subcategory
+                </button>
+                <button class="option-btn" onclick="setOption('view', 'top10')">
+                  Top 10 Impact
+                </button>
+              </div>
+            </div>
+            
+            <div class="option-group">
+              <div class="option-label">Display Options</div>
+              <div class="option-buttons">
+                <button class="option-btn active" onclick="setOption('labels', 'show')">
+                  Show Labels
+                </button>
+                <button class="option-btn" onclick="setOption('labels', 'hide')">
+                  Hide Labels
+                </button>
+              </div>
+            </div>
+          </div>
+          
+          <div class="preview-chart">
+            <div class="mini-waterfall">
+              <p style="text-align: center; color: #5f6368;">
+                Waterfall chart preview will appear here after generation
+              </p>
+            </div>
+          </div>
+        </div>
+      `;
+      
+      previewEl.innerHTML = html;
+    }
+    
+    function visualizeProject() {
+      if (!selectedProject) return;
+      
+      // Show loading
+      document.getElementById('visualizeBtn').disabled = true;
+      document.getElementById('visualizeBtn').textContent = 'Creating Chart...';
+      
+      // Call server to create waterfall
+      google.script.run
+        .withSuccessHandler(onVisualizationSuccess)
+        .withFailureHandler(onVisualizationError)
+        .createWaterfallFromProject(selectedProject);
+    }
+    
+    function onVisualizationSuccess(result) {
+      // Close selector dialog
+      google.script.host.close();
+    }
+    
+    function onVisualizationError(error) {
+      document.getElementById('visualizeBtn').disabled = false;
+      document.getElementById('visualizeBtn').textContent = 'Create Waterfall Chart';
+      
+      alert('Error creating waterfall chart: ' + error.message);
+    }
+    
+    function switchTab(tab) {
+      currentTab = tab;
+      
+      // Update tab states
+      document.querySelectorAll('.filter-tab').forEach(el => {
+        el.classList.remove('active');
+      });
+      event.target.classList.add('active');
+      
+      // Re-render list
+      renderProjectList();
+    }
+    
+    function filterProjects() {
+      renderProjectList();
+    }
+    
+    function groupProjectsBySource(projects) {
+      const grouped = {
+        summary: [],
+        database: []
+      };
+      
+      projects.forEach(p => {
+        if (p.source === 'summary') {
+          grouped.summary.push(p);
+        } else {
+          grouped.database.push(p);
+        }
+      });
+      
+      return grouped;
+    }
+    
+    function loadRecentProjects() {
+      // Load from local storage or properties service
+      const recent = localStorage.getItem('recentWaterfallProjects');
+      if (recent) {
+        try {
+          recentProjects = JSON.parse(recent);
+        } catch (e) {
+          recentProjects = [];
+        }
+      }
+    }
+    
+    function saveToRecent(project) {
+      let recent = [];
+      const stored = localStorage.getItem('recentWaterfallProjects');
+      
+      if (stored) {
+        try {
+          recent = JSON.parse(stored);
+        } catch (e) {
+          recent = [];
+        }
+      }
+      
+      // Remove if already exists
+      recent = recent.filter(p => 
+        p.projectNumber !== project.projectNumber && 
+        p.name !== project.name
+      );
+      
+      // Add to beginning
+      recent.unshift({
+        ...project,
+        lastAccessed: new Date().toISOString()
+      });
+      
+      // Keep only last 10
+      recent = recent.slice(0, 10);
+      
+      localStorage.setItem('recentWaterfallProjects', JSON.stringify(recent));
+    }
+    
+    function getRecentProjects() {
+      const stored = localStorage.getItem('recentWaterfallProjects');
+      if (!stored) return [];
+      
+      try {
+        return JSON.parse(stored);
+      } catch (e) {
+        return [];
+      }
+    }
+    
+    function setOption(type, value) {
+      // Update button states
+      const buttons = event.target.parentElement.querySelectorAll('.option-btn');
+      buttons.forEach(btn => btn.classList.remove('active'));
+      event.target.classList.add('active');
+      
+      // Store option
+      if (!selectedProject.options) {
+        selectedProject.options = {};
+      }
+      selectedProject.options[type] = value;
+    }
+    
+    function formatCurrency(value) {
+      if (typeof value !== 'number') return 'N/A';
+      
+      const absValue = Math.abs(value);
+      if (absValue >= 1000) {
+        return (value / 1000).toFixed(0) + 'K';
+      }
+      return value.toFixed(0);
+    }
+    
+    function escapeHtml(text) {
+      const div = document.createElement('div');
+      div.textContent = text;
+      return div.innerHTML;
+    }
+    
+    function escapeQuotes(str) {
+      return str.replace(/'/g, "\\'").replace(/"/g, '\\"');
+    }
+    
+    function handleError(error) {
+      console.error('Error:', error);
+      document.getElementById('projectList').innerHTML = `
+        <div class="empty-state">
+          <div class="empty-icon">❌</div>
+          <div class="empty-title">Error Loading Projects</div>
+          <div class="empty-message">${error.message}</div>
+        </div>
+      `;
+    }
+    
+    function cancel() {
+      google.script.host.close();
+    }
+    
+    function getEmptyStateHTML() {
+      return `
+        <div class="empty-state">
+          <div class="empty-icon">📊</div>
+          <div class="empty-title">No Project Selected</div>
+          <div class="empty-message">
+            Select a project from the list to preview its financial data and generate a waterfall chart
+          </div>
+        </div>
+      `;
+    }
+  </script>
+</body>
+</html>
