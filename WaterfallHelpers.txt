@@ -1,0 +1,111 @@
+/**
+ * WaterfallHelpers.gs
+ * Helper functions for waterfall enhancement
+ */
+
+// Add to recent waterfalls
+function addToRecentWaterfalls(project) {
+  let recent = [];
+  const stored = PropertiesService.getUserProperties()
+    .getProperty('RECENT_WATERFALLS');
+  
+  if (stored) {
+    try {
+      recent = JSON.parse(stored);
+    } catch (e) {
+      recent = [];
+    }
+  }
+  
+  // Add new project with timestamp
+  recent.unshift({
+    ...project,
+    timestamp: new Date().toISOString()
+  });
+  
+  // Keep only last 10
+  recent = recent.slice(0, 10);
+  
+  PropertiesService.getUserProperties()
+    .setProperty('RECENT_WATERFALLS', JSON.stringify(recent));
+}
+
+// Export waterfall chart
+function exportWaterfallChart(format) {
+  const data = PropertiesService.getScriptProperties()
+    .getProperty('WATERFALL_DATA');
+  
+  if (!data) {
+    throw new Error('No waterfall data found');
+  }
+  
+  const waterfallData = JSON.parse(data);
+  
+  switch(format) {
+    case 'excel':
+      exportWaterfallToExcel(waterfallData);
+      break;
+    case 'pdf':
+      exportWaterfallToPDF(waterfallData);
+      break;
+    case 'png':
+      exportWaterfallToPNG(waterfallData);
+      break;
+  }
+}
+
+// Export to Excel
+function exportWaterfallToExcel(data) {
+  const ss = SpreadsheetApp.create(`Waterfall Export - ${new Date().toLocaleDateString()}`);
+  const sheet = ss.getActiveSheet();
+  
+  // Add headers
+  sheet.getRange('A1').setValue('Waterfall Chart Data Export');
+  sheet.getRange('A1').setFontSize(16).setFontWeight('bold');
+  
+  // Add data
+  let row = 3;
+  sheet.getRange('A3:D3').setValues([['Category', 'Subcategory', 'Budget', 'EAC']]);
+  
+  data.categories.forEach(cat => {
+    row++;
+    sheet.getRange(row, 1).setValue(cat.name).setFontWeight('bold');
+    sheet.getRange(row, 3).setValue(cat.budget);
+    sheet.getRange(row, 4).setValue(cat.eac);
+    
+    cat.subcategories.forEach(sub => {
+      row++;
+      sheet.getRange(row, 2).setValue(sub.name);
+      sheet.getRange(row, 3).setValue(sub.budget);
+      sheet.getRange(row, 4).setValue(sub.eac);
+    });
+  });
+  
+  // Format
+  sheet.autoResizeColumns(1, 4);
+  
+  // Open
+  const url = ss.getUrl();
+  const html = `<script>window.open('${url}', '_blank'); google.script.host.close();</script>`;
+  SpreadsheetApp.getUi().showModalDialog(
+    HtmlService.createHtmlOutput(html).setHeight(1).setWidth(1), 
+    'Opening...'
+  );
+}
+
+// Extract waterfall data from summary
+function extractWaterfallDataFromSummary(summarySheet) {
+  // Use existing getWaterfallChartData logic
+  const props = PropertiesService.getScriptProperties();
+  props.setProperty('WATERFALL_DATA', JSON.stringify({
+    categorizedItemsEAC: {},
+    categorizedItemsBudget: {},
+    totalEACCost: 0,
+    totalBudgetedCost: 0,
+    mainCatTotalsEAC: {},
+    mainCatTotalsBudget: {}
+  }));
+  
+  // Call existing function
+  return getWaterfallChartData();
+}
