@@ -1,0 +1,344 @@
+/**
+ * WaterfallMenuIntegration.gs
+ * Functions to integrate waterfall chart with menu system
+ */
+
+// Add waterfall menu items
+function addWaterfallMenu() {
+  const ui = SpreadsheetApp.getUi();
+  const menu = ui.createMenu('📊 Waterfall Charts');
+  
+  menu.addItem('🆕 Create from Project', 'showWaterfallProjectSelector');
+  menu.addItem('📋 Create from Active Sheet', 'createWaterfallFromActiveSheet');
+  menu.addSeparator();
+  menu.addItem('🕒 Recent Charts', 'showRecentWaterfalls');
+  menu.addItem('⚙️ Chart Settings', 'showWaterfallSettings');
+  menu.addSeparator();
+  menu.addItem('💾 Export Current Chart', 'exportCurrentWaterfall');
+  menu.addItem('🖨️ Print Current Chart', 'printCurrentWaterfall');
+  
+  menu.addToUi();
+}
+
+// Show project selector UI
+function showWaterfallProjectSelector() {
+  const html = HtmlService.createHtmlOutputFromFile('WaterfallProjectSelector')
+    .setWidth(1000)
+    .setHeight(700);
+  
+  SpreadsheetApp.getUi().showModalDialog(html, 'Select Project for Waterfall Chart');
+}
+
+// Get projects for waterfall selector
+function getProjectsForWaterfall() {
+  return WaterfallEnhancer.getInstance().getAvailableProjects();
+}
+
+// Create waterfall from selected project
+function createWaterfallFromProject(project) {
+  const enhancer = WaterfallEnhancer.getInstance();
+  
+  try {
+    // Show progress
+    SpreadsheetApp.getUi().alert('Creating Waterfall Chart', 
+      'Preparing data for visualization...', 
+      SpreadsheetApp.getUi().ButtonSet.OK);
+    
+    let summarySheet = null;
+    
+    // Get or create summary sheet based on project type
+    if (project.type === 'summary') {
+      // Use existing summary sheet
+      summarySheet = SpreadsheetApp.getActiveSpreadsheet()
+        .getSheetByName(project.sheetName);
+    } else if (project.type === 'database') {
+      // Need to analyze project first
+      const result = analyzeProjectFromDatabase(project);
+      if (result.success) {
+        summarySheet = result.summarySheet;
+      } else {
+        throw new Error('Failed to analyze project');
+      }
+    }
+    
+    if (!summarySheet) {
+      throw new Error('Could not find or create summary sheet');
+    }
+    
+    // Prepare waterfall data
+    const waterfallData = prepareWaterfallData(summarySheet);
+    
+    // Store in properties for waterfall UI
+    PropertiesService.getScriptProperties()
+      .setProperty('WATERFALL_DATA', JSON.stringify(waterfallData));
+    
+    // Show enhanced waterfall UI
+    showEnhancedWaterfallUI(project);
+    
+    return { success: true };
+    
+  } catch (error) {
+    console.error('Error creating waterfall:', error);
+    throw error;
+  }
+}
+
+// Analyze project from database
+function analyzeProjectFromDatabase(project) {
+  try {
+    // Set current project for analysis
+    PropertiesService.getScriptProperties()
+      .setProperty('CURRENT_PROJECT', JSON.stringify({
+        projectNumber: project.projectNumber,
+        projectName: project.projectName,
+        currency: 'EUR' // Assume EUR for database projects
+      }));
+    
+    // Run analysis
+    performProjectAnalysis(project.projectNumber, 1);
+    
+    // Find the created summary sheet
+    const summarySheet = SpreadsheetApp.getActiveSpreadsheet()
+      .getSheetByName(project.projectName + ' Summary');
+    
+    if (summarySheet) {
+      return { success: true, summarySheet: summarySheet };
+    } else {
+      return { success: false, error: 'Summary sheet not created' };
+    }
+    
+  } catch (error) {
+    console.error('Error analyzing project:', error);
+    return { success: false, error: error.toString() };
+  }
+}
+
+// Prepare waterfall data from summary sheet
+function prepareWaterfallData(summarySheet) {
+  const enhancer = WaterfallEnhancer.getInstance();
+  
+  // Check cache first
+  const cacheKey = `waterfall_${summarySheet.getName()}_${summarySheet.getLastRow()}`;
+  const cached = enhancer.chartCache.get(cacheKey);
+  
+  if (cached && (Date.now() - cached.timestamp < enhancer.config.cacheTimeout)) {
+    return cached.data;
+  }
+  
+  // Extract data (using existing logic)
+  const data = extractWaterfallDataFromSummary(summarySheet);
+  
+  // Cache it
+  enhancer.chartCache.set(cacheKey, {
+    data: data,
+    timestamp: Date.now()
+  });
+  
+  return data;
+}
+
+// Show enhanced waterfall UI
+function showEnhancedWaterfallUI(project) {
+  const html = HtmlService.createTemplateFromFile('EnhancedWaterfallUI');
+  
+  // Pass project info to template
+  html.projectName = project.projectName || project.name;
+  html.projectNumber = project.projectNumber;
+  html.options = project.options || {};
+  
+  const output = html.evaluate()
+    .setWidth(1200)
+    .setHeight(800);
+  
+  SpreadsheetApp.getUi().showModalDialog(output, 
+    `Waterfall Chart - ${project.projectName || project.name}`);
+}
+
+// Create from active sheet
+function createWaterfallFromActiveSheet() {
+  const sheet = SpreadsheetApp.getActiveSheet();
+  
+  if (!sheet.getName().includes('Summary')) {
+    SpreadsheetApp.getUi().alert(
+      'Invalid Sheet',
+      'Please select a project summary sheet first.',
+      SpreadsheetApp.getUi().ButtonSet.OK
+    );
+    return;
+  }
+  
+  const project = {
+    name: sheet.getName().replace(' Summary', ''),
+    sheetName: sheet.getName(),
+    type: 'summary'
+  };
+  
+  createWaterfallFromProject(project);
+}
+
+// Show recent waterfalls
+function showRecentWaterfalls() {
+  const recent = PropertiesService.getUserProperties()
+    .getProperty('RECENT_WATERFALLS');
+  
+  if (!recent) {
+    SpreadsheetApp.getUi().alert(
+      'No Recent Charts',
+      'No waterfall charts have been created recently.',
+      SpreadsheetApp.getUi().ButtonSet.OK
+    );
+    return;
+  }
+  
+  const charts = JSON.parse(recent);
+  
+  // Create selection dialog
+  const html = HtmlService.createHtmlOutput(`
+    <div style="padding: 20px;">
+      <h3>Recent Waterfall Charts</h3>
+      <ul style="list-style: none; padding: 0;">
+        ${charts.map((chart, index) => `
+          <li style="padding: 10px; cursor: pointer; hover: background: #f0f0f0;"
+              onclick="selectRecent(${index})">
+            <strong>${chart.projectName}</strong><br>
+            <small>${new Date(chart.timestamp).toLocaleString()}</small>
+          </li>
+        `).join('')}
+      </ul>
+    </div>
+    <script>
+      function selectRecent(index) {
+        google.script.run
+          .withSuccessHandler(() => google.script.host.close())
+          .loadRecentWaterfall(index);
+      }
+    </script>
+  `).setWidth(400).setHeight(300);
+  
+  SpreadsheetApp.getUi().showModalDialog(html, 'Recent Waterfall Charts');
+}
+
+// Load recent waterfall
+function loadRecentWaterfall(index) {
+  const recent = PropertiesService.getUserProperties()
+    .getProperty('RECENT_WATERFALLS');
+  
+  if (recent) {
+    const charts = JSON.parse(recent);
+    if (charts[index]) {
+      createWaterfallFromProject(charts[index]);
+    }
+  }
+}
+
+// Export current waterfall
+function exportCurrentWaterfall() {
+  const data = PropertiesService.getScriptProperties()
+    .getProperty('WATERFALL_DATA');
+  
+  if (!data) {
+    SpreadsheetApp.getUi().alert('No waterfall chart is currently open.');
+    return;
+  }
+  
+  // Create export options dialog
+  const html = HtmlService.createHtmlOutput(`
+    <div style="padding: 20px;">
+      <h3>Export Waterfall Chart</h3>
+      <p>Select export format:</p>
+      <div style="margin: 20px 0;">
+        <button onclick="exportAs('png')" style="margin: 5px; padding: 10px 20px;">
+          Export as PNG
+        </button><br>
+        <button onclick="exportAs('pdf')" style="margin: 5px; padding: 10px 20px;">
+          Export as PDF
+        </button><br>
+        <button onclick="exportAs('excel')" style="margin: 5px; padding: 10px 20px;">
+          Export as Excel
+        </button>
+      </div>
+    </div>
+    <script>
+      function exportAs(format) {
+        google.script.run
+          .withSuccessHandler(() => {
+            google.script.host.close();
+          })
+          .exportWaterfallChart(format);
+      }
+    </script>
+  `).setWidth(300).setHeight(250);
+  
+  SpreadsheetApp.getUi().showModalDialog(html, 'Export Options');
+}
+
+// Waterfall settings
+function showWaterfallSettings() {
+  const html = HtmlService.createHtmlOutput(`
+    <div style="padding: 20px;">
+      <h3>Waterfall Chart Settings</h3>
+      <form id="settingsForm">
+        <div style="margin: 10px 0;">
+          <label>
+            <input type="checkbox" id="enableCache" checked>
+            Enable data caching
+          </label>
+        </div>
+        <div style="margin: 10px 0;">
+          <label>
+            <input type="checkbox" id="enhancedTooltips" checked>
+            Enhanced tooltips
+          </label>
+        </div>
+        <div style="margin: 10px 0;">
+          <label>
+            <input type="checkbox" id="animations" checked>
+            Enable animations
+          </label>
+        </div>
+        <div style="margin: 10px 0;">
+          <label>
+            Default view:
+            <select id="defaultView">
+              <option value="category">By Category</option>
+              <option value="subcategory">By Subcategory</option>
+              <option value="top10">Top 10 Impact</option>
+            </select>
+          </label>
+        </div>
+        <div style="margin: 20px 0;">
+          <button type="button" onclick="saveSettings()">Save Settings</button>
+          <button type="button" onclick="google.script.host.close()">Cancel</button>
+        </div>
+      </form>
+    </div>
+    <script>
+      function saveSettings() {
+        const settings = {
+          enableCache: document.getElementById('enableCache').checked,
+          enhancedTooltips: document.getElementById('enhancedTooltips').checked,
+          animations: document.getElementById('animations').checked,
+          defaultView: document.getElementById('defaultView').value
+        };
+        
+        google.script.run
+          .withSuccessHandler(() => {
+            alert('Settings saved!');
+            google.script.host.close();
+          })
+          .saveWaterfallSettings(settings);
+      }
+    </script>
+  `).setWidth(400).setHeight(300);
+  
+  SpreadsheetApp.getUi().showModalDialog(html, 'Settings');
+}
+
+// Save waterfall settings
+function saveWaterfallSettings(settings) {
+  const enhancer = WaterfallEnhancer.getInstance();
+  Object.assign(enhancer.config, settings);
+  
+  PropertiesService.getUserProperties()
+    .setProperty('WATERFALL_SETTINGS', JSON.stringify(settings));
+}
