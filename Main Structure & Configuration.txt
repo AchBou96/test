@@ -27,7 +27,26 @@ function onOpen() {
       .addSeparator()
       .addItem('About', 'showAbout')
       .addToUi();
-  }
+    ui.createMenu('📊 Export Enhancements')
+      .addItem('⚡ Enable Fast Export', 'enableExportEnhancement')
+      .addItem('🐌 Disable Fast Export', 'disableExportEnhancement')
+      .addItem('📈 Show Export Stats', 'showExportStats')
+      .addItem('🗑️ Clear Export Cache', 'clearExportCache')
+      .addToUi();
+    addBatchServiceMenu();
+    addWaterfallMenu();
+    WaterfallEnhancer.getInstance();
+ 
+}
+  function enableExportEnhancement() {
+  ExportEnhancer.getInstance().isEnabled = true;
+  SpreadsheetApp.getUi().alert('Export enhancements enabled!');
+}
+
+function disableExportEnhancement() {
+  ExportEnhancer.getInstance().isEnabled = false;
+  SpreadsheetApp.getUi().alert('Export enhancements disabled!');
+} 
   
   // Configuration Module
   // ============================================
