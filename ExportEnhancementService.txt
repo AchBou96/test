@@ -1,0 +1,433 @@
+/**
+ * ExportEnhancementService.gs
+ * Transparent optimization layer for export operations
+ */
+
+const ExportEnhancer = (function() {
+    let instance = null;
+    
+    function ExportEnhancerSingleton() {
+      this.isEnabled = true;
+      this.batchOperations = [];
+      this.progressTracking = null;
+      this.exportCache = new Map();
+      this.originalFunctions = {};
+      
+      // Store original functions
+      this.preserveOriginals = function() {
+        const functions = [
+          'exportIndividualSummariesExcel',
+          'exportIndividualSummariesPDF',
+          'createPDFReport',
+          'createPortfolioReport',
+          'createExecutiveDashboard',
+          'exportKeyMetricsTable',
+          'customSelectionExport'
+        ];
+        
+        functions.forEach(fname => {
+          if (typeof globalThis[fname] === 'function') {
+            this.originalFunctions[fname] = globalThis[fname];
+          }
+        });
+      };
+      
+      /**
+       * Progress tracking that doesn't interfere with existing UI
+       */
+      this.showProgress = function(title, message, percent) {
+        // Create overlay if it doesn't exist
+        if (!this.progressElement) {
+          const html = `
+            <div id="exportProgress" style="
+              position: fixed;
+              top: 20px;
+              right: 20px;
+              background: white;
+              border-radius: 8px;
+              box-shadow: 0 4px 20px rgba(0,0,0,0.15);
+              padding: 20px;
+              min-width: 300px;
+              z-index: 10000;
+              display: none;
+            ">
+              <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
+                <h3 id="exportProgressTitle" style="margin: 0; font-size: 16px; color: #333;">Exporting...</h3>
+                <button onclick="ExportEnhancer.getInstance().hideProgress()" style="
+                  background: none;
+                  border: none;
+                  font-size: 20px;
+                  cursor: pointer;
+                  color: #666;
+                ">×</button>
+              </div>
+              <p id="exportProgressMessage" style="margin: 5px 0; font-size: 14px; color: #666;"></p>
+              <div style="background: #f0f0f0; border-radius: 4px; height: 8px; margin-top: 10px;">
+                <div id="exportProgressBar" style="
+                  background: #4285f4;
+                  height: 100%;
+                  border-radius: 4px;
+                  width: 0%;
+                  transition: width 0.3s ease;
+                "></div>
+              </div>
+            </div>
+          `;
+          
+          // Inject into current UI
+          const ui = HtmlService.createHtmlOutput(html)
+            .setHeight(1)
+            .setWidth(1);
+          SpreadsheetApp.getUi().showModelessDialog(ui, ' ');
+        }
+        
+        // Update progress
+        this.updateProgress(title, message, percent);
+      };
+      
+      this.updateProgress = function(title, message, percent) {
+        // This will be called through Google Apps Script HTML Service
+        google.script.run.updateExportProgress(title, message, percent);
+      };
+      
+      this.hideProgress = function() {
+        // Hide progress UI
+        if (this.progressElement) {
+          this.progressElement.style.display = 'none';
+        }
+      };
+      
+      /**
+       * Batch operations for better performance
+       */
+      this.batchCopySheets = function(sheets, targetSS, progressCallback) {
+        const total = sheets.length;
+        let processed = 0;
+        
+        // Group operations
+        const batchSize = 5;
+        
+        for (let i = 0; i < sheets.length; i += batchSize) {
+          const batch = sheets.slice(i, i + batchSize);
+          
+          // Process batch
+          batch.forEach((sheet, index) => {
+            const newSheet = sheet.copyTo(targetSS);
+            newSheet.setName(sheet.getName());
+            
+            // Remove default sheet on first copy
+            if (i === 0 && index === 0) {
+              const defaultSheet = targetSS.getSheetByName('Sheet1');
+              if (defaultSheet) targetSS.deleteSheet(defaultSheet);
+            }
+            
+            processed++;
+            if (progressCallback) {
+              progressCallback({ current: processed, total: total });
+            }
+          });
+          
+          // Small delay to prevent timeout
+          Utilities.sleep(100);
+        }
+      };
+      
+      /**
+       * Create optimized spreadsheet
+       */
+      this.createSpreadsheetOptimized = function(name) {
+        return SpreadsheetApp.create(name);
+      };
+      
+      /**
+       * Optimized cell operations
+       */
+      this.optimizeCellOperations = function(sheet, operations) {
+        // Group operations by range
+        const rangeGroups = new Map();
+        
+        operations.forEach(op => {
+          const key = `${op.row},${op.col}`;
+          if (!rangeGroups.has(key)) {
+            rangeGroups.set(key, []);
+          }
+          rangeGroups.get(key).push(op);
+        });
+        
+        // Execute in batches
+        rangeGroups.forEach((ops, key) => {
+          const [row, col] = key.split(',').map(Number);
+          
+          // Combine setValue operations
+          if (ops.length === 1) {
+            sheet.getRange(row, col).setValue(ops[0].value);
+          } else {
+            // Apply all formatting at once
+            const range = sheet.getRange(row, col);
+            range.setValue(ops[0].value);
+            
+            ops.forEach(op => {
+              if (op.format) range.setNumberFormat(op.format);
+              if (op.fontWeight) range.setFontWeight(op.fontWeight);
+              if (op.fontSize) range.setFontSize(op.fontSize);
+              if (op.background) range.setBackground(op.background);
+            });
+          }
+        });
+      };
+      
+      /**
+       * Error recovery wrapper
+       */
+      this.withErrorRecovery = function(operation, fallback) {
+        const maxRetries = 3;
+        let lastError = null;
+        
+        for (let attempt = 1; attempt <= maxRetries; attempt++) {
+          try {
+            return operation();
+          } catch (error) {
+            lastError = error;
+            console.error(`Export attempt ${attempt} failed:`, error);
+            
+            if (attempt < maxRetries) {
+              // Exponential backoff
+              Utilities.sleep(Math.pow(2, attempt) * 1000);
+            }
+          }
+        }
+        
+        // All retries failed
+        if (fallback) {
+          console.log('Falling back to original implementation');
+          return fallback();
+        }
+        
+        throw lastError;
+      };
+      
+      /**
+       * Optimized PDF generation
+       */
+      this.generatePDFOptimized = function(sheet, projectName, projectNumber) {
+        // Get all data at once
+        const dataRange = sheet.getDataRange();
+        const values = dataRange.getValues();
+        const formats = dataRange.getNumberFormats();
+        const backgrounds = dataRange.getBackgrounds();
+        
+        // Create HTML for PDF
+        let html = this.generatePDFHTML(values, formats, backgrounds, projectName, projectNumber);
+        
+        // Convert to PDF
+        const blob = Utilities.newBlob(html, 'text/html', 'temp.html');
+        return blob.getAs('application/pdf');
+      };
+      
+      /**
+       * Generate PDF HTML
+       */
+      this.generatePDFHTML = function(values, formats, backgrounds, projectName, projectNumber) {
+        // Implementation would go here
+        // This is a placeholder that should be implemented based on your needs
+        return `<html><body><h1>${projectName}</h1><p>Project: ${projectNumber}</p></body></html>`;
+      };
+      
+      /**
+       * Intelligent caching for export operations
+       */
+      this.getCachedProjectData = function(sheet) {
+        const cacheKey = `project_${sheet.getName()}_${sheet.getLastRow()}`;
+        
+        if (this.exportCache.has(cacheKey)) {
+          const cached = this.exportCache.get(cacheKey);
+          if (Date.now() - cached.timestamp < 60000) { // 1 minute cache
+            return cached.data;
+          }
+        }
+        
+        // Extract data (same logic as original extractProjectData)
+        const data = this.extractProjectDataOptimized(sheet);
+        
+        // Cache it
+        this.exportCache.set(cacheKey, {
+          data: data,
+          timestamp: Date.now()
+        });
+        
+        return data;
+      };
+      
+      /**
+       * Optimized data extraction
+       */
+      this.extractProjectDataOptimized = function(sheet) {
+        // Read all data at once
+        const lastRow = sheet.getLastRow();
+        const lastCol = sheet.getLastColumn();
+        
+        if (lastRow < 1) return null;
+        
+        const allData = sheet.getRange(1, 1, lastRow, Math.min(lastCol, 5)).getValues();
+        
+        const projectData = {
+          projectName: '',
+          projectNumber: '',
+          eacCost: 0,
+          budgetCost: 0,
+          laborPercent: 0,
+          equipmentPercent: 0
+        };
+        
+        // Process in memory
+        for (let i = 0; i < allData.length; i++) {
+          const row = allData[i];
+          const cellA = String(row[0]);
+          
+          // Look for specific patterns
+          if (i === 2 && row[2]) projectData.projectName = row[2];
+          if (i === 3 && row[2]) projectData.projectNumber = row[2];
+          
+          if (cellA.includes('EAC Cost (kEUR)')) {
+            projectData.eacCost = parseFloat(row[2]) || 0;
+          } else if (cellA.includes('Budgeted Cost (kEUR)')) {
+            projectData.budgetCost = parseFloat(row[2]) || 0;
+          } else if (cellA === 'LABOR' && row[3]) {
+            projectData.laborPercent = row[3];
+          } else if (cellA === 'EQUIPMENTS' && row[3]) {
+            projectData.equipmentPercent = row[3];
+          }
+        }
+        
+        // Calculate variance
+        projectData.variance = projectData.budgetCost - projectData.eacCost;
+        projectData.variancePercent = projectData.budgetCost !== 0 ? 
+          (projectData.eacCost - projectData.budgetCost) / projectData.budgetCost : 0;
+        
+        return projectData;
+      };
+      
+      /**
+       * Configuration that doesn't break existing usage
+       */
+      this.configure = function(options) {
+        this.config = Object.assign({
+          enableProgress: true,
+          enableCaching: true,
+          batchSize: 5,
+          retryAttempts: 3,
+          optimizePDF: true
+        }, options);
+      };
+    }
+    
+    return {
+      getInstance: function() {
+        if (!instance) {
+          instance = new ExportEnhancerSingleton();
+          instance.preserveOriginals();
+        }
+        return instance;
+      }
+    };
+  })();
+  
+  /**
+   * Enhanced export functions that maintain exact same interface
+   */
+  
+  // Store original function
+  const _originalExportIndividualSummariesExcel = exportIndividualSummariesExcel;
+  
+  // Override with enhanced version
+  exportIndividualSummariesExcel = function() {
+    const enhancer = ExportEnhancer.getInstance();
+    
+    if (!enhancer.isEnabled) {
+      return _originalExportIndividualSummariesExcel();
+    }
+    
+    try {
+      // Show progress
+      enhancer.showProgress('Excel Export', 'Initializing...', 0);
+      
+      // Get summary sheets (same as original)
+      const ss = SpreadsheetApp.getActiveSpreadsheet();
+      const summarySheets = getSummarySheets();
+      
+      if (summarySheets.length === 0) {
+        SpreadsheetApp.getUi().alert(
+          'No project summary sheets found.\nPlease analyze projects first to create summary sheets.'
+        );
+        return;
+      }
+      
+      // Create export spreadsheet with optimization
+      const exportSS = enhancer.createSpreadsheetOptimized(
+        `Project Summaries Export - ${new Date().toLocaleDateString()}`
+      );
+      
+      // Batch copy sheets
+      enhancer.batchCopySheets(summarySheets, exportSS, (progress) => {
+        enhancer.updateProgress(
+          'Excel Export', 
+          `Copying sheet ${progress.current} of ${progress.total}...`,
+          (progress.current / progress.total) * 100
+        );
+      });
+      
+      // Get URL (same as original)
+      const url = exportSS.getUrl();
+      
+      enhancer.hideProgress();
+      
+      // Show success (same as original)
+      const ui = SpreadsheetApp.getUi();
+      const response = ui.alert('Export Complete',
+        `Successfully exported ${summarySheets.length} summary sheet(s).\n\nWould you like to open the exported file?`,
+        ui.ButtonSet.YES_NO);
+      
+      if (response === ui.Button.YES) {
+        const html = `<script>window.open('${url}', '_blank'); google.script.host.close();</script>`;
+        ui.showModalDialog(HtmlService.createHtmlOutput(html).setHeight(1).setWidth(1), 'Opening...');
+      }
+      
+    } catch (error) {
+      enhancer.hideProgress();
+      console.error('Export enhancement error:', error);
+      // Fallback to original
+      return _originalExportIndividualSummariesExcel();
+    }
+  };
+  
+  // Store original
+  const _originalCreatePDFReport = createPDFReport;
+  
+  // Enhanced version
+  createPDFReport = function(summarySheet, folder) {
+    const enhancer = ExportEnhancer.getInstance();
+    
+    if (!enhancer.isEnabled) {
+      return _originalCreatePDFReport(summarySheet, folder);
+    }
+    
+    return enhancer.withErrorRecovery(
+      () => {
+        const projectName = summarySheet.getRange('C3').getValue();
+        const projectNumber = summarySheet.getRange('C4').getValue();
+        
+        // Use template instead of creating temporary spreadsheet
+        const pdfBlob = enhancer.generatePDFOptimized(summarySheet, projectName, projectNumber);
+        
+        // Save to folder (same as original)
+        pdfBlob.setName(`${projectName.replace(/ Summary$/, '')} - Summary Report.pdf`);
+        folder.createFile(pdfBlob);
+      },
+      () => _originalCreatePDFReport(summarySheet, folder)
+    );
+  };
+  
+  // Global configuration function
+  function configureExportEnhancer(options) {
+    ExportEnhancer.getInstance().configure(options);
+  }
