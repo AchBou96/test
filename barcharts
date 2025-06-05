@@ -1,0 +1,53 @@
+Here's the minimal change to make the variance contribution chart a horizontal bar chart with absolute values in K euros:
+In the Charts Module.txt, replace the variance distribution chart section (around line 180-220) with:
+javascript// 5. Variance Distribution by Main Category
+const totalProjectVariance = totalEACCost - totalBudgetedCost;
+
+if (Math.abs(totalProjectVariance) > 0) {
+  const varianceData = [['Category', 'Variance (kEUR)']];  // Changed header
+  
+  // Calculate variances
+  for (const cat in mainCatTotalsEAC) {
+    const variance = mainCatTotalsEAC[cat] - (mainCatTotalsBudget[cat] || 0);
+    varianceData.push([cat, variance / 1000]);  // Absolute value in kEUR
+  }
+  
+  // Add any budget categories not in EAC
+  for (const cat in mainCatTotalsBudget) {
+    if (!mainCatTotalsEAC[cat]) {
+      const variance = -mainCatTotalsBudget[cat];
+      varianceData.push([cat, variance / 1000]);  // Absolute value in kEUR
+    }
+  }
+  
+  if (varianceData.length > 1) {
+    const varianceDataRange = sheet.getRange(chartStartRow + 40, 20, varianceData.length, 2);
+    varianceDataRange.setValues(varianceData);
+    
+    // HORIZONTAL BAR CHART WITH ABSOLUTE VALUES
+    const varianceChart = sheet.newChart()
+      .setChartType(Charts.ChartType.BAR)  // BAR = horizontal bars
+      .addRange(varianceDataRange)
+      .setPosition(26, 12, 0, 0)
+      .setOption('title', 'Variance by Main Category (kEUR)')
+      .setOption('width', 400)
+      .setOption('height', 250)
+      .setOption('legend', {position: 'none'})
+      .setOption('hAxis', {title: 'Variance (kEUR)'})  // Horizontal axis for values
+      .setOption('vAxis', {textStyle: {fontSize: 12}})  // Vertical axis for categories
+      .setOption('colors', ['#4285f4'])  // Single color for all bars
+      .build();
+    
+    sheet.insertChart(varianceChart);
+  }
+}
+This minimal change:
+
+Changes chart type from PIE to BAR (horizontal bar chart)
+Changes data values from percentage contribution to absolute variance in kEUR
+Updates chart title and axis labels to reflect kEUR values
+Removes percentage calculations and variance labels from category names
+Configures horizontal axis for variance values
+Keeps categories on vertical axis with readable font size
+
+The chart will now display horizontal bars showing the actual variance amounts in thousands of euros for each category.
